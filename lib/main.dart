@@ -15,5 +15,3 @@ class MyApp extends StatelessWidget {
       title: 'BookListSample',
       home: BookListPage(),
     );
-  }
-}
