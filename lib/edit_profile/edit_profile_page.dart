@@ -1,4 +1,4 @@
-import 'package:book_list_sample/edit_profile/edit_profile_model.dart';
+import 'package:osakalivetheater2/edit_profile/edit_profile_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

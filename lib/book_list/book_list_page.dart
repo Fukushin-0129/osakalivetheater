@@ -1,9 +1,9 @@
-import 'package:book_list_sample/add_book/add_book_page.dart';
-import 'package:book_list_sample/book_list/book_list_model.dart';
-import 'package:book_list_sample/domain/book.dart';
-import 'package:book_list_sample/edit_book/edit_book_page.dart';
-import 'package:book_list_sample/login/login_page.dart';
-import 'package:book_list_sample/mypage/my_page.dart';
+import 'package:osakalivetheater2/add_book/add_book_page.dart';
+import 'package:osakalivetheater2/book_list/book_list_model.dart';
+import 'package:osakalivetheater2/domain/book.dart';
+import 'package:osakalivetheater2/edit_book/edit_book_page.dart';
+import 'package:osakalivetheater2/login/login_page.dart';
+import 'package:osakalivetheater2/mypage/my_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';

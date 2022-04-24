@@ -1,5 +1,5 @@
-import 'package:book_list_sample/edit_profile/edit_profile_page.dart';
-import 'package:book_list_sample/mypage/my_model.dart';
+import 'package:osakalivetheater2/edit_profile/edit_profile_page.dart';
+import 'package:osakalivetheater2/mypage/my_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

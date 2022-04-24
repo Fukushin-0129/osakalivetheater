@@ -1,5 +1,5 @@
-import 'package:book_list_sample/login/login_model.dart';
-import 'package:book_list_sample/register/register_page.dart';
+import 'package:osakalivetheater2/login/login_model.dart';
+import 'package:osakalivetheater2/register/register_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

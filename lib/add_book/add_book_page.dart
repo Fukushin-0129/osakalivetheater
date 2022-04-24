@@ -1,4 +1,4 @@
-import 'package:book_list_sample/add_book/add_book_model.dart';
+import 'package:osakalivetheater2/add_book/add_book_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
