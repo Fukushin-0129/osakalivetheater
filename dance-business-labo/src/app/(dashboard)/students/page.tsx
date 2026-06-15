@@ -67,7 +67,7 @@ export default function StudentsPage() {
     }
 
     const map = new Map<string, string>()
-    for (const a of (attData ?? []) as { student_id: string; lessons: { scheduled_at: string } | null }[]) {
+    for (const a of (attData ?? []) as unknown as { student_id: string; lessons: { scheduled_at: string } | null }[]) {
       const date = a.lessons?.scheduled_at?.slice(0, 10)
       if (!date) continue
       const prev = map.get(a.student_id)
