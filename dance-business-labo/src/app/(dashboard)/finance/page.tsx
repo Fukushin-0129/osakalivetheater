@@ -6,7 +6,8 @@ import type { Transaction } from '@/types/database'
 import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 
 const INCOME_CATEGORIES = ['レッスン料', 'チケット販売', 'グッズ', 'その他収入']
-const EXPENSE_CATEGORIES = ['会場費', '交通費', '衣装・道具', '広告費', '通信費', 'その他経費']
+const EXPENSE_CATEGORIES = ['レッスン場代', '会場費', '交通費', '衣装・道具', '広告費', '通信費', 'その他経費']
+const DEFAULT_VENUE = '山田ふれあい文化センター練習室'
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
@@ -30,6 +31,7 @@ export default function FinancePage() {
   const [saving, setSaving] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())
   const [showModal, setShowModal] = useState(false)
+  const [showLessonModal, setShowLessonModal] = useState(false)
   const [expandedMonth, setExpandedMonth] = useState<number | null>(new Date().getMonth())
   const [form, setForm] = useState({
     transaction_date: new Date().toISOString().split('T')[0],
@@ -37,6 +39,11 @@ export default function FinancePage() {
     category: INCOME_CATEGORIES[0],
     amount: '',
     description: '',
+  })
+  const [lessonForm, setLessonForm] = useState({
+    lesson_date: new Date().toISOString().split('T')[0],
+    venue: DEFAULT_VENUE,
+    amount: '',
   })
   const supabase = createClient()
 
@@ -60,6 +67,22 @@ export default function FinancePage() {
     await supabase.from('transactions').insert({ ...form, amount: Number(form.amount) })
     setSaving(false)
     setShowModal(false)
+    load()
+  }
+
+  async function handleLessonSave() {
+    if (!lessonForm.amount || Number(lessonForm.amount) <= 0) return
+    setSaving(true)
+    await supabase.from('transactions').insert({
+      transaction_date: lessonForm.lesson_date,
+      type: 'expense',
+      category: 'レッスン場代',
+      amount: Number(lessonForm.amount),
+      description: lessonForm.venue,
+    })
+    setSaving(false)
+    setShowLessonModal(false)
+    setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], venue: DEFAULT_VENUE, amount: '' })
     load()
   }
 
@@ -112,15 +135,26 @@ export default function FinancePage() {
             {availableYears.map(y => <option key={y} value={y}>{y}年</option>)}
           </select>
         </div>
-        <button
-          onClick={() => {
-            setForm({ transaction_date: new Date().toISOString().split('T')[0], type: 'income', category: INCOME_CATEGORIES[0], amount: '', description: '' })
-            setShowModal(true)
-          }}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
-        >
-          <Plus size={16} /> 明細追加
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], venue: DEFAULT_VENUE, amount: '' })
+              setShowLessonModal(true)
+            }}
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
+          >
+            <Plus size={16} /> レッスン場代
+          </button>
+          <button
+            onClick={() => {
+              setForm({ transaction_date: new Date().toISOString().split('T')[0], type: 'income', category: INCOME_CATEGORIES[0], amount: '', description: '' })
+              setShowModal(true)
+            }}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
+          >
+            <Plus size={16} /> 明細追加
+          </button>
+        </div>
       </div>
 
       {/* サマリーカード */}
@@ -334,6 +368,65 @@ export default function FinancePage() {
           </div>
         )}
       </div>
+
+      {/* レッスン場代追加モーダル */}
+      {showLessonModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">レッスン場代を追加</h2>
+              <button onClick={() => setShowLessonModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600">レッスン日（支払日も同日）</label>
+                <input
+                  type="date"
+                  value={lessonForm.lesson_date}
+                  onChange={e => setLessonForm(f => ({ ...f, lesson_date: e.target.value }))}
+                  className={`mt-1 ${inputCls}`}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">会場</label>
+                <input
+                  type="text"
+                  value={lessonForm.venue}
+                  onChange={e => setLessonForm(f => ({ ...f, venue: e.target.value }))}
+                  className={`mt-1 ${inputCls}`}
+                  placeholder={DEFAULT_VENUE}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">金額（円）</label>
+                <input
+                  type="number"
+                  value={lessonForm.amount}
+                  onChange={e => setLessonForm(f => ({ ...f, amount: e.target.value }))}
+                  className={`mt-1 ${inputCls}`}
+                  placeholder="0"
+                  min="1"
+                />
+              </div>
+              <div className="bg-gray-50 rounded-xl px-4 py-2 text-xs text-gray-500 space-y-0.5">
+                <div>種別: <span className="font-medium text-red-600">支出</span></div>
+                <div>カテゴリ: <span className="font-medium text-gray-700">レッスン場代</span></div>
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setShowLessonModal(false)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
+              <button
+                onClick={handleLessonSave}
+                disabled={saving || !lessonForm.amount || Number(lessonForm.amount) <= 0}
+                className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white py-2.5 rounded-xl text-sm font-medium"
+              >
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {saving ? '保存中...' : '追加する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 明細追加モーダル */}
       {showModal && (
