@@ -136,6 +136,7 @@ export default function FinancePage() {
     category: INCOME_CATEGORIES[0],
     amount: '',
     description: '',
+    lesson_date: '',
   })
   const [lessonForm, setLessonForm] = useState(initLessonForm())
   const supabase = createClient()
@@ -184,7 +185,10 @@ export default function FinancePage() {
   async function handleSave() {
     if (!form.amount || Number(form.amount) <= 0) return
     setSaving(true)
-    await supabase.from('transactions').insert({ ...form, amount: Number(form.amount) })
+    const description = form.category === 'レッスン場代' && form.lesson_date
+      ? `${form.description || DEFAULT_VENUE}（レッスン日: ${form.lesson_date}）`
+      : form.description
+    await supabase.from('transactions').insert({ ...form, amount: Number(form.amount), description, lesson_date: undefined })
     setSaving(false)
     setShowModal(false)
     load()
@@ -278,7 +282,7 @@ export default function FinancePage() {
           </button>
           <button
             onClick={() => {
-              setForm({ transaction_date: new Date().toISOString().split('T')[0], type: 'income', category: INCOME_CATEGORIES[0], amount: '', description: '' })
+              setForm({ transaction_date: new Date().toISOString().split('T')[0], type: 'income', category: INCOME_CATEGORIES[0], amount: '', description: '', lesson_date: '' })
               setShowModal(true)
             }}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
@@ -527,7 +531,7 @@ export default function FinancePage() {
                           <td className={`px-3 py-2.5 font-medium ${t.type === 'income' ? 'text-green-700' : 'text-red-600'}`}>
                             {t.type === 'expense' ? '-' : ''}¥{t.amount.toLocaleString()}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-400 hidden md:table-cell">
+                          <td className="px-3 py-2.5 text-gray-400">
                             {(() => {
                               const sid = parseStudentId(t.description)
                               const sName = sid != null ? studentMap.get(sid) : null
@@ -686,9 +690,15 @@ export default function FinancePage() {
                 <label className="text-xs font-medium text-gray-600">金額（円）</label>
                 <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className={`mt-1 ${inputCls}`} placeholder="0" min="1" />
               </div>
+              {form.category === 'レッスン場代' && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">レッスン日</label>
+                  <input type="date" value={form.lesson_date} onChange={e => setForm(f => ({ ...f, lesson_date: e.target.value }))} className={`mt-1 ${inputCls}`} />
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-gray-600">内容・メモ</label>
-                <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={`mt-1 ${inputCls}`} />
+                <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={`mt-1 ${inputCls}`} placeholder={form.category === 'レッスン場代' ? DEFAULT_VENUE : ''} />
               </div>
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
