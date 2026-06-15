@@ -151,12 +151,13 @@ export default function FinancePage() {
     if (!lessonForm.amount || Number(lessonForm.amount) <= 0) return
     if (lessonForm.lesson_dates.size === 0) return
     setSaving(true)
-    const rows = [...lessonForm.lesson_dates].sort().map(date => ({
-      transaction_date: date,
+    const sortedDates = [...lessonForm.lesson_dates].sort()
+    const rows = sortedDates.map(date => ({
+      transaction_date: lessonForm.payment_date,
       type: 'expense',
       category: 'レッスン場代',
       amount: Number(lessonForm.amount),
-      description: `${lessonForm.venue}（支払: ${lessonForm.payment_date}）`,
+      description: `${lessonForm.venue}（レッスン日: ${date}）`,
     }))
     await supabase.from('transactions').insert(rows)
     setSaving(false)
@@ -475,7 +476,7 @@ export default function FinancePage() {
 
               {/* 支払日 */}
               <div>
-                <label className="text-xs font-medium text-gray-600">支払日</label>
+                <label className="text-xs font-medium text-gray-600">支払日（決算に反映される日付）</label>
                 <input
                   type="date"
                   value={lessonForm.payment_date}
@@ -516,7 +517,7 @@ export default function FinancePage() {
                   <div className="text-xs text-gray-600 space-y-0.5">
                     <div>{lessonForm.lesson_dates.size}件のレッスン場代を追加</div>
                     <div>合計: <span className="font-bold text-orange-700">¥{(lessonForm.lesson_dates.size * Number(lessonForm.amount)).toLocaleString()}</span></div>
-                    <div>種別: <span className="text-red-600 font-medium">支出</span> ／ カテゴリ: レッスン場代</div>
+                    <div>決算月: <span className="font-medium text-gray-700">{lessonForm.payment_date.slice(0, 7)}（支払日基準）</span></div>
                   </div>
                 </div>
               )}
