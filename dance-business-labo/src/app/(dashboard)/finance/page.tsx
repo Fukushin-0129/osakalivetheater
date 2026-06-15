@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Transaction } from '@/types/database'
+import type { Transaction, Student } from '@/types/database'
 import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, X, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
 
-const INCOME_CATEGORIES = ['レッスン料', 'チケット販売', 'グッズ', 'その他収入']
+const INCOME_CATEGORIES = ['レッスン収入', 'レッスン料', 'チケット販売', 'グッズ', 'その他収入']
 const EXPENSE_CATEGORIES = ['レッスン場代', '会場費', '交通費', '衣装・道具', '広告費', '通信費', 'その他経費']
 const DEFAULT_VENUE = '山田ふれあい文化センター練習室'
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
@@ -14,6 +14,7 @@ const WEEKDAYS = ['日','月','火','水','木','金','土']
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
 
 const CATEGORY_COLORS: Record<string, string> = {
+  'レッスン収入': 'bg-green-600',
   'レッスン料': 'bg-green-500',
   'チケット販売': 'bg-emerald-400',
   'グッズ': 'bg-teal-400',
@@ -26,6 +27,11 @@ const CATEGORY_COLORS: Record<string, string> = {
   'その他経費': 'bg-purple-400',
 }
 
+function toYMD(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// 複数日選択カレンダー
 function MultiDateCalendar({ selected, onChange }: { selected: Set<string>; onChange: (s: Set<string>) => void }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
@@ -106,8 +112,15 @@ const initLessonForm = () => ({
   amount: '',
 })
 
+function parseStudentId(description: string | null): number | null {
+  if (!description) return null
+  const m = description.match(/参加者ID:(\d+)/)
+  return m ? Number(m[1]) : null
+}
+
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [studentMap, setStudentMap] = useState<Map<number, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())
@@ -126,13 +139,24 @@ export default function FinancePage() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase
-      .from('transactions')
-      .select('*')
-      .gte('transaction_date', `${year}-01-01`)
-      .lte('transaction_date', `${year}-12-31`)
-      .order('transaction_date', { ascending: false })
-    setTransactions(data ?? [])
+    const [{ data: txData }, { data: stuData }] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select('*')
+        .gte('transaction_date', `${year}-01-01`)
+        .lte('transaction_date', `${year}-12-31`)
+        .order('transaction_date', { ascending: false }),
+      supabase
+        .from('students')
+        .select('legacy_id, name')
+        .not('legacy_id', 'is', null),
+    ])
+    setTransactions(txData ?? [])
+    const map = new Map<number, string>()
+    for (const s of (stuData ?? []) as Pick<Student, 'legacy_id' | 'name'>[]) {
+      if (s.legacy_id != null) map.set(s.legacy_id, s.name)
+    }
+    setStudentMap(map)
     setLoading(false)
   }
 
@@ -424,7 +448,15 @@ export default function FinancePage() {
                           <td className={`px-3 py-2.5 font-medium ${t.type === 'income' ? 'text-green-700' : 'text-red-600'}`}>
                             {t.type === 'expense' ? '-' : ''}¥{t.amount.toLocaleString()}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-400 hidden md:table-cell">{t.description}</td>
+                          <td className="px-3 py-2.5 text-gray-400 hidden md:table-cell">
+                            {(() => {
+                              const sid = parseStudentId(t.description)
+                              const sName = sid != null ? studentMap.get(sid) : null
+                              return sName
+                                ? <span className="text-indigo-600 font-medium text-xs">{sName}</span>
+                                : <span className="text-xs">{t.description}</span>
+                            })()}
+                          </td>
                           <td className="px-3 py-2.5 text-right">
                             <button onClick={() => handleDelete(t.id)} className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
                               <Trash2 size={14} />
@@ -476,7 +508,7 @@ export default function FinancePage() {
 
               {/* 支払日 */}
               <div>
-                <label className="text-xs font-medium text-gray-600">支払日（決算に反映される日付）</label>
+                <label className="text-xs font-medium text-gray-600">支払日</label>
                 <input
                   type="date"
                   value={lessonForm.payment_date}
@@ -517,7 +549,7 @@ export default function FinancePage() {
                   <div className="text-xs text-gray-600 space-y-0.5">
                     <div>{lessonForm.lesson_dates.size}件のレッスン場代を追加</div>
                     <div>合計: <span className="font-bold text-orange-700">¥{(lessonForm.lesson_dates.size * Number(lessonForm.amount)).toLocaleString()}</span></div>
-                    <div>決算月: <span className="font-medium text-gray-700">{lessonForm.payment_date.slice(0, 7)}（支払日基準）</span></div>
+                    <div>種別: <span className="text-red-600 font-medium">支出</span> ／ カテゴリ: レッスン場代</div>
                   </div>
                 </div>
               )}
