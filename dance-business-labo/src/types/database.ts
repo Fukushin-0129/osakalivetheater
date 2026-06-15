@@ -8,6 +8,7 @@ export type Student = {
   address: string | null
   emergency_contact: string | null
   notes: string | null
+  legacy_id: number | null
   is_active: boolean
   joined_at: string
   created_at: string
