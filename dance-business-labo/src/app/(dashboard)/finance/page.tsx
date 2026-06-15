@@ -221,7 +221,7 @@ export default function FinancePage() {
     return Object.entries(map).sort((a, b) => b[1] - a[1])
   }, [transactions])
 
-  const availableYears = [2024, 2025, 2026, 2027]
+  const availableYears = Array.from({ length: new Date().getFullYear() - 2002 + 5 }, (_, i) => 2002 + i)
 
   return (
     <div>
