@@ -118,9 +118,12 @@ function parseStudentId(description: string | null): number | null {
   return m ? Number(m[1]) : null
 }
 
+type YearlyTotal = { year: number; income: number; expense: number }
+
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [studentMap, setStudentMap] = useState<Map<number, string>>(new Map())
+  const [allYearlyTotals, setAllYearlyTotals] = useState<YearlyTotal[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [year, setYear] = useState(new Date().getFullYear())
@@ -136,6 +139,21 @@ export default function FinancePage() {
   })
   const [lessonForm, setLessonForm] = useState(initLessonForm())
   const supabase = createClient()
+
+  async function loadAllYears() {
+    const { data } = await supabase
+      .from('transactions')
+      .select('transaction_date, type, amount')
+    if (!data) return
+    const map: Record<number, { income: number; expense: number }> = {}
+    for (const t of data) {
+      const y = Number(t.transaction_date.slice(0, 4))
+      if (!map[y]) map[y] = { income: 0, expense: 0 }
+      if (t.type === 'income') map[y].income += t.amount
+      else map[y].expense += t.amount
+    }
+    setAllYearlyTotals(Object.entries(map).map(([y, v]) => ({ year: Number(y), ...v })).sort((a, b) => a.year - b.year))
+  }
 
   async function load() {
     setLoading(true)
@@ -160,6 +178,7 @@ export default function FinancePage() {
     setLoading(false)
   }
 
+  useEffect(() => { loadAllYears() }, [])
   useEffect(() => { load() }, [year])
 
   async function handleSave() {
@@ -199,6 +218,16 @@ export default function FinancePage() {
   const income = useMemo(() => transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [transactions])
   const expense = useMemo(() => transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [transactions])
   const profit = income - expense
+
+  const cumulativeData = useMemo(() => {
+    let cum = 0
+    return allYearlyTotals.map(y => {
+      cum += y.income - y.expense
+      return { ...y, profit: y.income - y.expense, cumulative: cum }
+    })
+  }, [allYearlyTotals])
+
+  const totalCumulative = cumulativeData.length > 0 ? cumulativeData[cumulativeData.length - 1].cumulative : 0
 
   const monthlyData = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const month = String(i + 1).padStart(2, '0')
@@ -260,7 +289,7 @@ export default function FinancePage() {
       </div>
 
       {/* サマリーカード */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-sm p-4">
           <div className="flex items-center gap-2 text-green-600 text-xs font-medium mb-2">
             <TrendingUp size={14} /> {year}年 収入合計
@@ -282,6 +311,15 @@ export default function FinancePage() {
           <div className="text-2xl font-bold text-white">¥{profit.toLocaleString()}</div>
           <div className="text-xs text-white/60 mt-1">
             利益率 {income > 0 ? Math.round((profit / income) * 100) : 0}%
+          </div>
+        </div>
+        <div className={`rounded-xl shadow-sm p-4 ${totalCumulative >= 0 ? 'bg-purple-600' : 'bg-red-800'}`}>
+          <div className="flex items-center gap-2 text-white/80 text-xs font-medium mb-2">
+            <DollarSign size={14} /> 累計損益（全期間）
+          </div>
+          <div className="text-2xl font-bold text-white">¥{totalCumulative.toLocaleString()}</div>
+          <div className="text-xs text-white/60 mt-1">
+            {cumulativeData.length > 0 ? `${cumulativeData[0].year}〜${cumulativeData[cumulativeData.length - 1].year}年` : ''}
           </div>
         </div>
       </div>
@@ -328,6 +366,47 @@ export default function FinancePage() {
           </>
         )}
       </div>
+
+      {/* 年次推移・累計損益テーブル */}
+      {cumulativeData.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">年次推移・累計損益</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-100">
+                  <th className="text-left pb-2 pr-3">年</th>
+                  <th className="text-right pb-2 pr-3 text-green-600">収入</th>
+                  <th className="text-right pb-2 pr-3 text-red-500">支出</th>
+                  <th className="text-right pb-2 pr-3 text-indigo-600">年間損益</th>
+                  <th className="text-right pb-2 text-purple-600 font-bold">累計損益</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {cumulativeData.map(row => (
+                  <tr
+                    key={row.year}
+                    className={`${row.year === year ? 'bg-indigo-50 font-semibold' : 'hover:bg-gray-50'}`}
+                    onClick={() => setYear(row.year)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td className="py-1.5 pr-3 text-gray-700">{row.year}年</td>
+                    <td className="py-1.5 pr-3 text-right text-green-700">{row.income > 0 ? `¥${row.income.toLocaleString()}` : '—'}</td>
+                    <td className="py-1.5 pr-3 text-right text-red-600">{row.expense > 0 ? `¥${row.expense.toLocaleString()}` : '—'}</td>
+                    <td className={`py-1.5 pr-3 text-right ${row.profit >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>
+                      {row.profit !== 0 ? `¥${row.profit.toLocaleString()}` : '—'}
+                    </td>
+                    <td className={`py-1.5 text-right font-bold ${row.cumulative >= 0 ? 'text-purple-700' : 'text-red-700'}`}>
+                      ¥{row.cumulative.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-3">行をクリックでその年の明細を表示</p>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-2 gap-6 mb-6">
         {/* カテゴリ別内訳 */}
