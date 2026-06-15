@@ -40,6 +40,7 @@ export default function StudentsPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [signedAvatarMap, setSignedAvatarMap] = useState<Map<string, string>>(new Map())
   const [zipLoading, setZipLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
@@ -50,7 +51,21 @@ export default function StudentsPage() {
       supabase.from('students').select('*'),
       supabase.from('attendance').select('student_id, lessons(scheduled_at)').eq('status', 'present'),
     ])
-    setStudents(stuData ?? [])
+    const stuList = stuData ?? []
+    setStudents(stuList)
+
+    // プライベートバケットの署名付きURL（1時間有効）を取得
+    const paths = stuList.filter(s => s.avatar_url && !s.avatar_url.startsWith('http')).map(s => s.avatar_url!)
+    if (paths.length > 0) {
+      const { data: signed } = await supabase.storage.from('student-avatars').createSignedUrls(paths, 3600)
+      const avatarMap = new Map<string, string>()
+      for (const s of stuList) {
+        const entry = signed?.find(u => u.path === s.avatar_url)
+        if (entry?.signedUrl) avatarMap.set(s.id, entry.signedUrl)
+      }
+      setSignedAvatarMap(avatarMap)
+    }
+
     const map = new Map<string, string>()
     for (const a of (attData ?? []) as { student_id: string; lessons: { scheduled_at: string } | null }[]) {
       const date = a.lessons?.scheduled_at?.slice(0, 10)
@@ -91,7 +106,7 @@ export default function StudentsPage() {
     })
     setFormError(null)
     setAvatarFile(null)
-    setAvatarPreview(s.avatar_url ?? null)
+    setAvatarPreview(signedAvatarMap.get(s.id) ?? null)
     setShowModal(true)
   }
 
@@ -125,8 +140,7 @@ export default function StudentsPage() {
     const path = `${studentId}/avatar.${ext}`
     const { error } = await supabase.storage.from('student-avatars').upload(path, file, { upsert: true })
     if (error) return null
-    const { data } = supabase.storage.from('student-avatars').getPublicUrl(path)
-    return data.publicUrl
+    return path
   }
 
   async function handleSave() {
@@ -281,8 +295,8 @@ export default function StudentsPage() {
                 <tr key={s.id} className={`hover:bg-gray-50 transition-colors ${!s.is_active ? 'opacity-60' : ''}`}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      {s.avatar_url ? (
-                        <img src={s.avatar_url} alt={s.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      {signedAvatarMap.get(s.id) ? (
+                        <img src={signedAvatarMap.get(s.id)} alt={s.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
                       ) : (
                         <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                           <span className="text-indigo-600 text-xs font-bold">{s.name.charAt(0)}</span>
@@ -461,6 +475,7 @@ export default function StudentsPage() {
                   </select>
                 </Field>
 
+                {/* 郵便番号 */}
                 <div className="col-span-2">
                   <Field label="郵便番号">
                     <div className="flex gap-2">
