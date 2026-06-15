@@ -13,6 +13,7 @@ type FilterStatus = 'all' | 'active' | 'inactive'
 const INIT_FORM = {
   name: '', name_kana: '', email: '', phone: '',
   birthdate: '', address: '', emergency_contact: '', notes: '',
+  legacy_id: '' as string | number,
   is_active: true,
 }
 
@@ -68,6 +69,7 @@ export default function StudentsPage() {
       address: s.address ?? '',
       emergency_contact: s.emergency_contact ?? '',
       notes: s.notes ?? '',
+      legacy_id: s.legacy_id ?? '',
       is_active: s.is_active,
     })
     setFormError(null)
@@ -78,10 +80,14 @@ export default function StudentsPage() {
     if (!form.name.trim()) { setFormError('名前は必須です'); return }
     setSaving(true)
     setFormError(null)
+    const payload = {
+      ...form,
+      legacy_id: form.legacy_id !== '' ? Number(form.legacy_id) : null,
+    }
     if (editing) {
-      await supabase.from('students').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editing.id)
+      await supabase.from('students').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing.id)
     } else {
-      await supabase.from('students').insert({ ...form })
+      await supabase.from('students').insert({ ...payload })
     }
     setSaving(false)
     setShowModal(false)
@@ -206,6 +212,7 @@ export default function StudentsPage() {
                     名前 <SortIcon col="name_kana" />
                   </button>
                 </th>
+                <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">参加者ID</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">電話番号</th>
                 <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">メール</th>
                 <th className="text-left px-4 py-3">
@@ -233,6 +240,11 @@ export default function StudentsPage() {
                       {s.name}
                     </Link>
                     {s.name_kana && <div className="text-xs text-gray-400 mt-0.5">{s.name_kana}</div>}
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    {s.legacy_id != null
+                      ? <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-mono">#{s.legacy_id}</span>
+                      : <span className="text-gray-300 text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell text-sm">{s.phone ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500 hidden lg:table-cell text-sm">{s.email ?? '—'}</td>
@@ -333,6 +345,15 @@ export default function StudentsPage() {
                     type="date"
                     value={form.birthdate}
                     onChange={e => setForm(f => ({ ...f, birthdate: e.target.value }))}
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="参加者ID（旧システム）">
+                  <input
+                    type="number"
+                    value={form.legacy_id}
+                    onChange={e => setForm(f => ({ ...f, legacy_id: e.target.value }))}
+                    placeholder="例: 899"
                     className={inputCls}
                   />
                 </Field>
