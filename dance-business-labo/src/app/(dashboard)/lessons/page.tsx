@@ -6,13 +6,14 @@ import type { Lesson, LessonType } from '@/types/database'
 import { Plus, Pencil, Trash2, Calendar, List, ChevronLeft, ChevronRight, Clock, MapPin, Users, X, Loader2 } from 'lucide-react'
 
 type ViewMode = 'list' | 'calendar'
+type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: { count: number }[] }
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 
 export default function LessonsPage() {
-  const [lessons, setLessons] = useState<Lesson[]>([])
+  const [lessons, setLessons] = useState<LessonWithCount[]>([])
   const [lessonTypes, setLessonTypes] = useState<LessonType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -33,10 +34,10 @@ export default function LessonsPage() {
   async function load() {
     setLoading(true)
     const [{ data: l }, { data: lt }] = await Promise.all([
-      supabase.from('lessons').select('*, lesson_types(*)').order('scheduled_at', { ascending: false }),
+      supabase.from('lessons').select('*, lesson_types(*), attendance(count)').order('scheduled_at', { ascending: false }),
       supabase.from('lesson_types').select('*').order('name'),
     ])
-    setLessons(l ?? [])
+    setLessons((l ?? []) as LessonWithCount[])
     setLessonTypes(lt ?? [])
     setLoading(false)
   }
@@ -114,7 +115,7 @@ export default function LessonsPage() {
 
   // リスト用: 月ごとにグループ
   const groupedLessons = useMemo(() => {
-    const groups: Record<string, Lesson[]> = {}
+    const groups: Record<string, LessonWithCount[]> = {}
     const sorted = [...lessons].sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))
     for (const l of sorted) {
       const key = l.scheduled_at.slice(0, 7)
@@ -254,8 +255,10 @@ export default function LessonsPage() {
                       const dt = new Date(l.scheduled_at)
                       const isPast = dt < today
                       const lt = l.lesson_types as LessonType | null
+                      const attendCount = l.attendance?.[0]?.count ?? 0
+                      const cap = l.max_capacity ?? 0
                       return (
-                        <tr key={l.id} className={`hover:bg-gray-50 transition-colors ${isPast ? 'opacity-60' : ''}`}>
+                        <tr key={l.id} className={`hover:bg-gray-50 transition-colors ${isPast ? 'opacity-70' : ''}`}>
                           <td className="px-4 py-3 w-28 text-gray-500 text-xs whitespace-nowrap">
                             <div className="font-medium text-gray-700">
                               {dt.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
@@ -282,8 +285,18 @@ export default function LessonsPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 hidden md:table-cell">
-                            <div className="flex items-center gap-1 text-gray-400 text-xs">
-                              <Users size={12} /> {l.max_capacity}名
+                            <div className="flex items-center gap-2 text-xs">
+                              <Users size={12} className="text-gray-400 flex-shrink-0" />
+                              <span className="font-semibold text-gray-700">{attendCount}</span>
+                              <span className="text-gray-400">/ {cap}名</span>
+                              {cap > 0 && (
+                                <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${attendCount / cap >= 0.9 ? 'bg-green-500' : attendCount / cap >= 0.5 ? 'bg-indigo-400' : 'bg-gray-300'}`}
+                                    style={{ width: `${Math.min((attendCount / cap) * 100, 100)}%` }}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">
