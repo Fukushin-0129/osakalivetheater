@@ -30,6 +30,7 @@ const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm foc
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
+  const [lastAttendedMap, setLastAttendedMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
@@ -44,8 +45,19 @@ export default function StudentsPage() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('students').select('*')
-    setStudents(data ?? [])
+    const [{ data: stuData }, { data: attData }] = await Promise.all([
+      supabase.from('students').select('*'),
+      supabase.from('attendance').select('student_id, lessons(scheduled_at)').eq('status', 'present'),
+    ])
+    setStudents(stuData ?? [])
+    const map = new Map<string, string>()
+    for (const a of (attData ?? []) as { student_id: string; lessons: { scheduled_at: string } | null }[]) {
+      const date = a.lessons?.scheduled_at?.slice(0, 10)
+      if (!date) continue
+      const prev = map.get(a.student_id)
+      if (!prev || date > prev) map.set(a.student_id, date)
+    }
+    setLastAttendedMap(map)
     setLoading(false)
   }
 
@@ -124,12 +136,17 @@ export default function StudentsPage() {
       )
     }
     list = [...list].sort((a, b) => {
-      const av = (a[sortKey] ?? '') as string
-      const bv = (b[sortKey] ?? '') as string
-      return sortDir === 'asc' ? av.localeCompare(bv, 'ja') : bv.localeCompare(av, 'ja')
+      // 在籍メンバーを先に、休会メンバーを後ろに
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+      // 同じステータス内は最後に来た日の新しい順
+      const aDate = lastAttendedMap.get(a.id) ?? ''
+      const bDate = lastAttendedMap.get(b.id) ?? ''
+      if (aDate !== bDate) return bDate.localeCompare(aDate)
+      // 最後に来た日が同じ場合はよみがな順
+      return (a.name_kana ?? a.name).localeCompare(b.name_kana ?? b.name, 'ja')
     })
     return list
-  }, [students, search, filterStatus, sortKey, sortDir])
+  }, [students, search, filterStatus, lastAttendedMap])
 
   const activeCount = students.filter(s => s.is_active).length
   const inactiveCount = students.filter(s => !s.is_active).length
@@ -215,11 +232,7 @@ export default function StudentsPage() {
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">参加者ID</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">電話番号</th>
                 <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">メール</th>
-                <th className="text-left px-4 py-3">
-                  <button onClick={() => handleSort('joined_at')} className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-800 hidden md:flex">
-                    入会日 <SortIcon col="joined_at" />
-                  </button>
-                </th>
+                <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">最終来院日</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">状態</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -248,7 +261,7 @@ export default function StudentsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell text-sm">{s.phone ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500 hidden lg:table-cell text-sm">{s.email ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{s.joined_at ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{lastAttendedMap.get(s.id) ?? '—'}</td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => toggleActive(s)}
