@@ -6,7 +6,8 @@ import type { Lesson, LessonType } from '@/types/database'
 import { Plus, Pencil, Trash2, Calendar, List, ChevronLeft, ChevronRight, Clock, MapPin, Users, X, Loader2 } from 'lucide-react'
 
 type ViewMode = 'list' | 'calendar'
-type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: { count: number }[] }
+type AttendanceWithStudent = { count: number; students: { name: string; name_kana: string | null } | null; status: string }
+type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[] }
 type AttendeeInfo = { id: string; student_id: string; status: string; students: { name: string; name_kana: string | null } | null }
 type AttendeeModal = { lessonId: string; lessonTitle: string; lessonDate: string } | null
 
@@ -39,7 +40,7 @@ export default function LessonsPage() {
   async function load() {
     setLoading(true)
     const [{ data: l }, { data: lt }] = await Promise.all([
-      supabase.from('lessons').select('*, lesson_types(*), attendance(count)').order('scheduled_at', { ascending: false }),
+      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana))').order('scheduled_at', { ascending: false }),
       supabase.from('lesson_types').select('*').order('name'),
     ])
     setLessons((l ?? []) as LessonWithCount[])
@@ -97,12 +98,8 @@ export default function LessonsPage() {
       lessonDate: dt.toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }),
     })
     setLoadingAttendees(true)
-    const { data } = await supabase
-      .from('attendance')
-      .select('id, student_id, status, students(name, name_kana)')
-      .eq('lesson_id', l.id)
-      .order('status')
-    setAttendees((data ?? []) as unknown as AttendeeInfo[])
+    const sorted = [...(l.attendance ?? [])].sort((a, b) => a.status.localeCompare(b.status))
+    setAttendees(sorted.map((a, i) => ({ id: String(i), student_id: '', status: a.status, students: a.students })))
     setLoadingAttendees(false)
   }
 
@@ -277,11 +274,12 @@ export default function LessonsPage() {
                       const dt = new Date(l.scheduled_at)
                       const isPast = dt < today
                       const lt = l.lesson_types as LessonType | null
-                      const attendCount = l.attendance?.[0]?.count ?? 0
+                      const presentList = l.attendance?.filter(a => a.status === 'present' || a.status === 'late') ?? []
+                      const attendCount = presentList.length
                       const cap = l.max_capacity ?? 0
                       return (
                         <tr key={l.id} className={`hover:bg-gray-50 transition-colors ${isPast ? 'opacity-70' : ''}`}>
-                          <td className="px-4 py-3 w-28 text-gray-500 text-xs whitespace-nowrap">
+                          <td className="px-4 py-3 w-28 text-gray-500 text-xs whitespace-nowrap align-top">
                             <div className="font-medium text-gray-700">
                               {dt.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
                               （{WEEKDAYS[dt.getDay()]}）
@@ -291,7 +289,7 @@ export default function LessonsPage() {
                               {dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 align-top">
                             <div className="font-medium text-gray-800">{l.title}</div>
                             {lt && (
                               <span className="inline-block mt-0.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full">
@@ -299,31 +297,30 @@ export default function LessonsPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 hidden md:table-cell">
+                          <td className="px-4 py-3 hidden md:table-cell align-top">
                             {l.location && (
                               <div className="flex items-center gap-1 text-gray-500 text-xs">
                                 <MapPin size={12} /> {l.location}
                               </div>
                             )}
                           </td>
-                          <td className="px-4 py-3 hidden md:table-cell">
+                          <td className="px-4 py-3 align-top">
                             <button
                               onClick={() => openAttendees(l)}
-                              className="flex items-center gap-2 text-xs hover:bg-indigo-50 rounded-lg px-2 py-1 transition-colors group"
-                              title="クリックで参加者を表示"
+                              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 transition-colors mb-1.5"
+                              title="クリックで参加者詳細を表示"
                             >
-                              <Users size={12} className="text-gray-400 group-hover:text-indigo-500 flex-shrink-0" />
-                              <span className="font-semibold text-gray-700 group-hover:text-indigo-600">{attendCount}</span>
+                              <Users size={12} className="flex-shrink-0" />
+                              <span className="font-semibold">{attendCount}</span>
                               <span className="text-gray-400">/ {cap}名</span>
-                              {cap > 0 && (
-                                <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full ${attendCount / cap >= 0.9 ? 'bg-green-500' : attendCount / cap >= 0.5 ? 'bg-indigo-400' : 'bg-gray-300'}`}
-                                    style={{ width: `${Math.min((attendCount / cap) * 100, 100)}%` }}
-                                  />
-                                </div>
-                              )}
                             </button>
+                            <div className="flex flex-wrap gap-1">
+                              {presentList.map((a, i) => (
+                                <span key={i} className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                                  {a.students?.name ?? '—'}
+                                </span>
+                              ))}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-right whitespace-nowrap">
                             <button onClick={() => openEdit(l)} className="text-gray-400 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors">
