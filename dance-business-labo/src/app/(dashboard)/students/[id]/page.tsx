@@ -21,6 +21,13 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
   if (!student) notFound()
 
+  // プライベートバケットの署名付きURL（1時間有効）
+  let avatarSignedUrl: string | null = null
+  if (student.avatar_url && !student.avatar_url.startsWith('http')) {
+    const { data } = await supabase.storage.from('student-avatars').createSignedUrl(student.avatar_url, 3600)
+    avatarSignedUrl = data?.signedUrl ?? null
+  }
+
   const statusLabel = { present: '出席', absent: '欠席', late: '遅刻', cancelled: 'キャンセル' }
   const statusColor = { present: 'bg-green-100 text-green-700', absent: 'bg-red-100 text-red-600', late: 'bg-yellow-100 text-yellow-700', cancelled: 'bg-gray-100 text-gray-500' }
 
@@ -28,6 +35,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     <div>
       <div className="flex items-center gap-3 mb-6">
         <Link href="/students" className="text-gray-400 hover:text-gray-600"><ArrowLeft size={20} /></Link>
+        {avatarSignedUrl && (
+          <img src={avatarSignedUrl} alt={student.name} className="w-10 h-10 rounded-full object-cover" />
+        )}
         <h1 className="text-2xl font-bold text-gray-800">{student.name}</h1>
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${student.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
           {student.is_active ? '在籍' : '休会'}
