@@ -1,18 +1,17 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Student } from '@/types/database'
-import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, ChevronUp, ChevronDown, X, Loader2 } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, X, Loader2, Camera } from 'lucide-react'
 import Link from 'next/link'
 
-type SortKey = 'name_kana' | 'joined_at' | 'name'
-type SortDir = 'asc' | 'desc'
 type FilterStatus = 'all' | 'active' | 'inactive'
 
 const INIT_FORM = {
   name: '', name_kana: '', email: '', phone: '',
-  birthdate: '', address: '', emergency_contact: '', notes: '',
+  birthdate: '', joined_at: '', postal_code: '', address: '',
+  emergency_contact: '', notes: '',
   legacy_id: '' as string | number,
   is_active: true,
 }
@@ -35,12 +34,14 @@ export default function StudentsPage() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
-  const [sortKey, setSortKey] = useState<SortKey>('name_kana')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
   const [form, setForm] = useState(INIT_FORM)
   const [formError, setFormError] = useState<string | null>(null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [zipLoading, setZipLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
   async function load() {
@@ -67,6 +68,8 @@ export default function StudentsPage() {
     setEditing(null)
     setForm(INIT_FORM)
     setFormError(null)
+    setAvatarFile(null)
+    setAvatarPreview(null)
     setShowModal(true)
   }
 
@@ -78,6 +81,8 @@ export default function StudentsPage() {
       email: s.email ?? '',
       phone: s.phone ?? '',
       birthdate: s.birthdate ?? '',
+      joined_at: s.joined_at ?? '',
+      postal_code: s.postal_code ?? '',
       address: s.address ?? '',
       emergency_contact: s.emergency_contact ?? '',
       notes: s.notes ?? '',
@@ -85,7 +90,43 @@ export default function StudentsPage() {
       is_active: s.is_active,
     })
     setFormError(null)
+    setAvatarFile(null)
+    setAvatarPreview(s.avatar_url ?? null)
     setShowModal(true)
+  }
+
+  async function lookupZip(zip: string) {
+    const z = zip.replace(/[^\d]/g, '')
+    if (z.length !== 7) return
+    setZipLoading(true)
+    try {
+      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${z}`)
+      const json = await res.json()
+      if (json.results?.[0]) {
+        const r = json.results[0]
+        setForm(f => ({ ...f, address: r.address1 + r.address2 + r.address3 }))
+      }
+    } catch {
+      // ignore
+    } finally {
+      setZipLoading(false)
+    }
+  }
+
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  async function uploadAvatar(file: File, studentId: string): Promise<string | null> {
+    const ext = file.name.split('.').pop() ?? 'jpg'
+    const path = `${studentId}/avatar.${ext}`
+    const { error } = await supabase.storage.from('student-avatars').upload(path, file, { upsert: true })
+    if (error) return null
+    const { data } = supabase.storage.from('student-avatars').getPublicUrl(path)
+    return data.publicUrl
   }
 
   async function handleSave() {
@@ -95,14 +136,27 @@ export default function StudentsPage() {
     const payload = {
       ...form,
       legacy_id: form.legacy_id !== '' ? Number(form.legacy_id) : null,
+      joined_at: form.joined_at || null,
+      postal_code: form.postal_code || null,
     }
+
+    let studentId: string = editing?.id ?? ''
     if (editing) {
       await supabase.from('students').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing.id)
     } else {
-      await supabase.from('students').insert({ ...payload })
+      const { data } = await supabase.from('students').insert({ ...payload }).select('id').single()
+      studentId = data?.id ?? ''
     }
+
+    if (avatarFile && studentId) {
+      const url = await uploadAvatar(avatarFile, studentId)
+      if (url) await supabase.from('students').update({ avatar_url: url, updated_at: new Date().toISOString() }).eq('id', studentId)
+    }
+
     setSaving(false)
     setShowModal(false)
+    setAvatarFile(null)
+    setAvatarPreview(null)
     load()
   }
 
@@ -115,11 +169,6 @@ export default function StudentsPage() {
   async function toggleActive(s: Student) {
     await supabase.from('students').update({ is_active: !s.is_active, updated_at: new Date().toISOString() }).eq('id', s.id)
     setStudents(prev => prev.map(p => p.id === s.id ? { ...p, is_active: !s.is_active } : p))
-  }
-
-  function handleSort(key: SortKey) {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('asc') }
   }
 
   const filtered = useMemo(() => {
@@ -136,13 +185,10 @@ export default function StudentsPage() {
       )
     }
     list = [...list].sort((a, b) => {
-      // 在籍メンバーを先に、休会メンバーを後ろに
       if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
-      // 同じステータス内は最後に来た日の新しい順
       const aDate = lastAttendedMap.get(a.id) ?? ''
       const bDate = lastAttendedMap.get(b.id) ?? ''
       if (aDate !== bDate) return bDate.localeCompare(aDate)
-      // 最後に来た日が同じ場合はよみがな順
       return (a.name_kana ?? a.name).localeCompare(b.name_kana ?? b.name, 'ja')
     })
     return list
@@ -151,16 +197,8 @@ export default function StudentsPage() {
   const activeCount = students.filter(s => s.is_active).length
   const inactiveCount = students.filter(s => !s.is_active).length
 
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) return <ChevronUp size={12} className="text-gray-300" />
-    return sortDir === 'asc'
-      ? <ChevronUp size={12} className="text-indigo-500" />
-      : <ChevronDown size={12} className="text-indigo-500" />
-  }
-
   return (
     <div>
-      {/* ヘッダー */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">生徒管理</h1>
@@ -174,7 +212,6 @@ export default function StudentsPage() {
         </button>
       </div>
 
-      {/* 統計カード */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
           { label: '全生徒', count: students.length, icon: Users, color: 'bg-indigo-50 text-indigo-600', filter: 'all' },
@@ -195,7 +232,6 @@ export default function StudentsPage() {
         ))}
       </div>
 
-      {/* 検索 */}
       <div className="bg-white rounded-xl shadow-sm p-3 mb-4 flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
@@ -214,7 +250,6 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      {/* テーブル */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-gray-400">
@@ -224,14 +259,10 @@ export default function StudentsPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left px-4 py-3">
-                  <button onClick={() => handleSort('name_kana')} className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-800">
-                    名前 <SortIcon col="name_kana" />
-                  </button>
-                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">名前</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">参加者ID</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">電話番号</th>
-                <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">メール</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">体験レッスン日</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">最終来院日</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">状態</th>
                 <th className="px-4 py-3 w-20"></th>
@@ -240,7 +271,7 @@ export default function StudentsPage() {
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400">
+                  <td colSpan={7} className="text-center py-12 text-gray-400">
                     <Users size={32} className="mx-auto mb-2 opacity-30" />
                     {search ? '検索条件に一致する生徒が見つかりません' : '生徒が登録されていません'}
                   </td>
@@ -249,10 +280,21 @@ export default function StudentsPage() {
               {filtered.map(s => (
                 <tr key={s.id} className={`hover:bg-gray-50 transition-colors ${!s.is_active ? 'opacity-60' : ''}`}>
                   <td className="px-4 py-3">
-                    <Link href={`/students/${s.id}`} className="font-medium text-indigo-600 hover:underline">
-                      {s.name}
-                    </Link>
-                    {s.name_kana && <div className="text-xs text-gray-400 mt-0.5">{s.name_kana}</div>}
+                    <div className="flex items-center gap-2">
+                      {s.avatar_url ? (
+                        <img src={s.avatar_url} alt={s.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-indigo-600 text-xs font-bold">{s.name.charAt(0)}</span>
+                        </div>
+                      )}
+                      <div>
+                        <Link href={`/students/${s.id}`} className="font-medium text-indigo-600 hover:underline">
+                          {s.name}
+                        </Link>
+                        {s.name_kana && <div className="text-xs text-gray-400 mt-0.5">{s.name_kana}</div>}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     {s.legacy_id != null
@@ -260,7 +302,9 @@ export default function StudentsPage() {
                       : <span className="text-gray-300 text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 hidden md:table-cell text-sm">{s.phone ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 hidden lg:table-cell text-sm">{s.email ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">
+                    {s.joined_at ? new Date(s.joined_at).toLocaleDateString('ja-JP') : '—'}
+                  </td>
                   <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{lastAttendedMap.get(s.id) ?? '—'}</td>
                   <td className="px-4 py-3">
                     <button
@@ -289,7 +333,6 @@ export default function StudentsPage() {
           </table>
         )}
 
-        {/* フッター */}
         {!loading && filtered.length > 0 && (
           <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
             {filtered.length} 名を表示
@@ -298,11 +341,9 @@ export default function StudentsPage() {
         )}
       </div>
 
-      {/* 追加・編集モーダル */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] flex flex-col">
-            {/* モーダルヘッダー */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
               <h2 className="text-lg font-bold text-gray-800">
                 {editing ? '生徒情報を編集' : '新規生徒を追加'}
@@ -312,8 +353,39 @@ export default function StudentsPage() {
               </button>
             </div>
 
-            {/* モーダルボディ（スクロール） */}
             <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+              {/* アバター */}
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="avatar" className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center border-2 border-dashed border-indigo-300">
+                      <Camera size={20} className="text-indigo-400" />
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 bg-indigo-600 text-white rounded-full p-1 shadow-sm hover:bg-indigo-700"
+                  >
+                    <Camera size={12} />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
+                </div>
+                <div className="text-xs text-gray-500">
+                  <p className="font-medium text-gray-700">プロフィール画像</p>
+                  <p>JPG・PNG・GIF対応</p>
+                  {avatarFile && <p className="text-indigo-600 mt-0.5">{avatarFile.name}</p>}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <Field label="名前 *">
@@ -361,6 +433,14 @@ export default function StudentsPage() {
                     className={inputCls}
                   />
                 </Field>
+                <Field label="体験レッスン日">
+                  <input
+                    type="date"
+                    value={form.joined_at}
+                    onChange={e => setForm(f => ({ ...f, joined_at: e.target.value }))}
+                    className={inputCls}
+                  />
+                </Field>
                 <Field label="参加者ID（旧システム）">
                   <input
                     type="number"
@@ -380,6 +460,32 @@ export default function StudentsPage() {
                     <option value="false">休会</option>
                   </select>
                 </Field>
+
+                {/* 郵便番号 */}
+                <div className="col-span-2">
+                  <Field label="郵便番号">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={form.postal_code}
+                        onChange={e => setForm(f => ({ ...f, postal_code: e.target.value }))}
+                        onBlur={e => lookupZip(e.target.value)}
+                        placeholder="000-0000"
+                        maxLength={8}
+                        className={`flex-1 ${inputCls}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => lookupZip(form.postal_code)}
+                        disabled={zipLoading}
+                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl text-xs font-medium disabled:opacity-50 whitespace-nowrap flex-shrink-0"
+                      >
+                        {zipLoading ? <Loader2 size={14} className="animate-spin" /> : '住所検索'}
+                      </button>
+                    </div>
+                  </Field>
+                </div>
+
                 <div className="col-span-2">
                   <Field label="住所">
                     <input
@@ -420,7 +526,6 @@ export default function StudentsPage() {
               )}
             </div>
 
-            {/* モーダルフッター */}
             <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
               <button
                 onClick={() => setShowModal(false)}

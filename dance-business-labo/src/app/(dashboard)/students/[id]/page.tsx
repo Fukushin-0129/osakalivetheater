@@ -40,10 +40,12 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           <dl className="space-y-2 text-sm">
             {[
               ['よみがな', student.name_kana],
+              ['参加者ID', student.legacy_id != null ? `#${student.legacy_id}` : null],
               ['メール', student.email],
               ['電話番号', student.phone],
               ['生年月日', student.birthdate],
-              ['体験レッスン日', student.joined_at],
+              ['体験レッスン日', student.joined_at ? new Date(student.joined_at).toLocaleDateString('ja-JP') : null],
+              ['郵便番号', student.postal_code],
               ['住所', student.address],
               ['緊急連絡先', student.emergency_contact],
             ].map(([label, value]) => value && (

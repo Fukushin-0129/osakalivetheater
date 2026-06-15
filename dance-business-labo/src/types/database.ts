@@ -6,11 +6,13 @@ export type Student = {
   phone: string | null
   birthdate: string | null
   address: string | null
+  postal_code: string | null
   emergency_contact: string | null
   notes: string | null
   legacy_id: number | null
   is_active: boolean
-  joined_at: string
+  joined_at: string | null
+  avatar_url: string | null
   created_at: string
   updated_at: string
 }
