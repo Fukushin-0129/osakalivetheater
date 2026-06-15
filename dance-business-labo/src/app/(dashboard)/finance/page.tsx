@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Transaction } from '@/types/database'
-import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, X, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const INCOME_CATEGORIES = ['レッスン料', 'チケット販売', 'グッズ', 'その他収入']
 const EXPENSE_CATEGORIES = ['レッスン場代', '会場費', '交通費', '衣装・道具', '広告費', '通信費', 'その他経費']
 const DEFAULT_VENUE = '山田ふれあい文化センター練習室'
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
+const WEEKDAYS = ['日','月','火','水','木','金','土']
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
 
@@ -25,6 +26,86 @@ const CATEGORY_COLORS: Record<string, string> = {
   'その他経費': 'bg-purple-400',
 }
 
+function MultiDateCalendar({ selected, onChange }: { selected: Set<string>; onChange: (s: Set<string>) => void }) {
+  const today = new Date()
+  const [viewYear, setViewYear] = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
+    else setViewMonth(m => m - 1)
+  }
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
+    else setViewMonth(m => m + 1)
+  }
+
+  const toggle = useCallback((dateStr: string) => {
+    const next = new Set(selected)
+    if (next.has(dateStr)) next.delete(dateStr)
+    else next.add(dateStr)
+    onChange(next)
+  }, [selected, onChange])
+
+  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+
+  return (
+    <div className="select-none">
+      <div className="flex items-center justify-between mb-2">
+        <button type="button" onClick={prevMonth} className="p-1 rounded hover:bg-gray-100 text-gray-500"><ChevronLeft size={16} /></button>
+        <span className="text-sm font-semibold text-gray-700">{viewYear}年 {viewMonth + 1}月</span>
+        <button type="button" onClick={nextMonth} className="p-1 rounded hover:bg-gray-100 text-gray-500"><ChevronRight size={16} /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {WEEKDAYS.map((d, i) => (
+          <div key={d} className={`text-center text-xs py-1 font-medium ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`e${idx}`} />
+          const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          const isSelected = selected.has(dateStr)
+          const dow = (firstDay + day - 1) % 7
+          return (
+            <button
+              key={dateStr}
+              type="button"
+              onClick={() => toggle(dateStr)}
+              className={`aspect-square flex items-center justify-center rounded-full text-sm transition-colors
+                ${isSelected
+                  ? 'bg-orange-500 text-white font-bold'
+                  : dow === 0
+                    ? 'text-red-400 hover:bg-red-50'
+                    : dow === 6
+                      ? 'text-blue-400 hover:bg-blue-50'
+                      : 'text-gray-700 hover:bg-gray-100'
+                }`}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+      {selected.size > 0 && (
+        <div className="mt-2 text-xs text-orange-600 font-medium">
+          {selected.size}日選択中
+        </div>
+      )}
+    </div>
+  )
+}
+
+const initLessonForm = () => ({
+  lesson_dates: new Set<string>(),
+  payment_date: new Date().toISOString().split('T')[0],
+  venue: DEFAULT_VENUE,
+  amount: '',
+})
+
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,11 +121,7 @@ export default function FinancePage() {
     amount: '',
     description: '',
   })
-  const [lessonForm, setLessonForm] = useState({
-    lesson_date: new Date().toISOString().split('T')[0],
-    venue: DEFAULT_VENUE,
-    amount: '',
-  })
+  const [lessonForm, setLessonForm] = useState(initLessonForm())
   const supabase = createClient()
 
   async function load() {
@@ -72,17 +149,19 @@ export default function FinancePage() {
 
   async function handleLessonSave() {
     if (!lessonForm.amount || Number(lessonForm.amount) <= 0) return
+    if (lessonForm.lesson_dates.size === 0) return
     setSaving(true)
-    await supabase.from('transactions').insert({
-      transaction_date: lessonForm.lesson_date,
+    const rows = [...lessonForm.lesson_dates].sort().map(date => ({
+      transaction_date: date,
       type: 'expense',
       category: 'レッスン場代',
       amount: Number(lessonForm.amount),
-      description: lessonForm.venue,
-    })
+      description: `${lessonForm.venue}（支払: ${lessonForm.payment_date}）`,
+    }))
+    await supabase.from('transactions').insert(rows)
     setSaving(false)
     setShowLessonModal(false)
-    setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], venue: DEFAULT_VENUE, amount: '' })
+    setLessonForm(initLessonForm())
     load()
   }
 
@@ -96,7 +175,6 @@ export default function FinancePage() {
   const expense = useMemo(() => transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [transactions])
   const profit = income - expense
 
-  // 月次データ
   const monthlyData = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const month = String(i + 1).padStart(2, '0')
     const monthTx = transactions.filter(t => t.transaction_date.startsWith(`${year}-${month}`))
@@ -110,7 +188,6 @@ export default function FinancePage() {
 
   const maxAmount = Math.max(...monthlyData.map(m => Math.max(m.income, m.expense)), 1)
 
-  // カテゴリ別集計
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {}
     for (const t of transactions) {
@@ -138,7 +215,7 @@ export default function FinancePage() {
         <div className="flex gap-2">
           <button
             onClick={() => {
-              setLessonForm({ lesson_date: new Date().toISOString().split('T')[0], venue: DEFAULT_VENUE, amount: '' })
+              setLessonForm(initLessonForm())
               setShowLessonModal(true)
             }}
             className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
@@ -372,21 +449,42 @@ export default function FinancePage() {
       {/* レッスン場代追加モーダル */}
       {showLessonModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-bold text-gray-800">レッスン場代を追加</h2>
               <button onClick={() => setShowLessonModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
+              {/* カレンダー */}
               <div>
-                <label className="text-xs font-medium text-gray-600">レッスン日（支払日も同日）</label>
+                <label className="text-xs font-medium text-gray-600 block mb-2">レッスン日（複数選択可）</label>
+                <div className="border border-gray-200 rounded-xl p-3">
+                  <MultiDateCalendar
+                    selected={lessonForm.lesson_dates}
+                    onChange={dates => setLessonForm(f => ({ ...f, lesson_dates: dates }))}
+                  />
+                </div>
+                {lessonForm.lesson_dates.size > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {[...lessonForm.lesson_dates].sort().map(d => (
+                      <span key={d} className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">{d}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 支払日 */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">支払日</label>
                 <input
                   type="date"
-                  value={lessonForm.lesson_date}
-                  onChange={e => setLessonForm(f => ({ ...f, lesson_date: e.target.value }))}
+                  value={lessonForm.payment_date}
+                  onChange={e => setLessonForm(f => ({ ...f, payment_date: e.target.value }))}
                   className={`mt-1 ${inputCls}`}
                 />
               </div>
+
+              {/* 会場 */}
               <div>
                 <label className="text-xs font-medium text-gray-600">会場</label>
                 <input
@@ -397,8 +495,10 @@ export default function FinancePage() {
                   placeholder={DEFAULT_VENUE}
                 />
               </div>
+
+              {/* 金額 */}
               <div>
-                <label className="text-xs font-medium text-gray-600">金額（円）</label>
+                <label className="text-xs font-medium text-gray-600">金額（円）/ 1レッスンあたり</label>
                 <input
                   type="number"
                   value={lessonForm.amount}
@@ -408,20 +508,29 @@ export default function FinancePage() {
                   min="1"
                 />
               </div>
-              <div className="bg-gray-50 rounded-xl px-4 py-2 text-xs text-gray-500 space-y-0.5">
-                <div>種別: <span className="font-medium text-red-600">支出</span></div>
-                <div>カテゴリ: <span className="font-medium text-gray-700">レッスン場代</span></div>
-              </div>
+
+              {/* サマリー */}
+              {lessonForm.lesson_dates.size > 0 && lessonForm.amount && Number(lessonForm.amount) > 0 && (
+                <div className="bg-orange-50 rounded-xl px-4 py-3 text-sm">
+                  <div className="text-orange-700 font-medium mb-1">登録内容</div>
+                  <div className="text-xs text-gray-600 space-y-0.5">
+                    <div>{lessonForm.lesson_dates.size}件のレッスン場代を追加</div>
+                    <div>合計: <span className="font-bold text-orange-700">¥{(lessonForm.lesson_dates.size * Number(lessonForm.amount)).toLocaleString()}</span></div>
+                    <div>種別: <span className="text-red-600 font-medium">支出</span> ／ カテゴリ: レッスン場代</div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white">
               <button onClick={() => setShowLessonModal(false)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
               <button
                 onClick={handleLessonSave}
-                disabled={saving || !lessonForm.amount || Number(lessonForm.amount) <= 0}
+                disabled={saving || lessonForm.lesson_dates.size === 0 || !lessonForm.amount || Number(lessonForm.amount) <= 0}
                 className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white py-2.5 rounded-xl text-sm font-medium"
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
-                {saving ? '保存中...' : '追加する'}
+                {saving ? '保存中...' : `${lessonForm.lesson_dates.size > 0 ? `${lessonForm.lesson_dates.size}件 ` : ''}追加する`}
               </button>
             </div>
           </div>
