@@ -43,7 +43,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
               ['メール', student.email],
               ['電話番号', student.phone],
               ['生年月日', student.birthdate],
-              ['入会日', student.joined_at],
+              ['体験レッスン日', student.joined_at],
               ['住所', student.address],
               ['緊急連絡先', student.emergency_contact],
             ].map(([label, value]) => value && (
