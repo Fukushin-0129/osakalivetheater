@@ -145,6 +145,7 @@ export default function FinancePage() {
     const { data } = await supabase
       .from('transactions')
       .select('transaction_date, type, amount')
+      .limit(100000)
     if (!data) return
     const map: Record<number, { income: number; expense: number }> = {}
     for (const t of data) {
