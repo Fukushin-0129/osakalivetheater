@@ -6,6 +6,9 @@ export type Student = {
   phone: string | null
   birthdate: string | null
   address: string | null
+  address1: string | null
+  address2: string | null
+  address3: string | null
   postal_code: string | null
   emergency_contact: string | null
   notes: string | null

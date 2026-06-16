@@ -10,7 +10,8 @@ type FilterStatus = 'all' | 'active' | 'inactive'
 
 const INIT_FORM = {
   name: '', name_kana: '', email: '', phone: '',
-  birthdate: '', joined_at: '', postal_code: '', address: '',
+  birthdate: '', joined_at: '', postal_code: '',
+  address1: '', address2: '', address3: '',
   emergency_contact: '', notes: '',
   legacy_id: '' as string | number,
   is_active: true,
@@ -98,7 +99,9 @@ export default function StudentsPage() {
       birthdate: s.birthdate ?? '',
       joined_at: s.joined_at ?? '',
       postal_code: s.postal_code ?? '',
-      address: s.address ?? '',
+      address1: s.address1 ?? s.address ?? '',
+      address2: s.address2 ?? '',
+      address3: s.address3 ?? '',
       emergency_contact: s.emergency_contact ?? '',
       notes: s.notes ?? '',
       legacy_id: s.legacy_id ?? '',
@@ -119,7 +122,7 @@ export default function StudentsPage() {
       const json = await res.json()
       if (json.results?.[0]) {
         const r = json.results[0]
-        setForm(f => ({ ...f, address: r.address1 + r.address2 + r.address3 }))
+        setForm(f => ({ ...f, address1: r.address1 + r.address2 + r.address3 }))
       }
     } catch {
       // ignore
@@ -153,6 +156,9 @@ export default function StudentsPage() {
       joined_at: form.joined_at || null,
       birthdate: form.birthdate || null,
       postal_code: form.postal_code || null,
+      address1: form.address1 || null,
+      address2: form.address2 || null,
+      address3: form.address3 || null,
     }
 
     let studentId: string = editing?.id ?? ''
@@ -502,15 +508,51 @@ export default function StudentsPage() {
                 </div>
 
                 <div className="col-span-2">
-                  <Field label="住所">
+                  <Field label="住所１（都道府県・市区町村）">
                     <input
-                      value={form.address}
-                      onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                      placeholder="大阪府大阪市..."
+                      value={form.address1}
+                      onChange={e => setForm(f => ({ ...f, address1: e.target.value }))}
+                      placeholder="例: 大阪府吹田市千里山西"
                       className={inputCls}
                     />
+                    <p className="text-xs text-gray-400 mt-0.5">郵便番号検索で自動入力されます</p>
                   </Field>
                 </div>
+                <div className="col-span-2">
+                  <Field label="住所２（丁目・番地）">
+                    <input
+                      value={form.address2}
+                      onChange={e => setForm(f => ({ ...f, address2: e.target.value }))}
+                      placeholder="例: 2丁目3番4号"
+                      className={inputCls}
+                    />
+                    <p className="text-xs text-gray-400 mt-0.5">丁目・番地・号を入力</p>
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="住所３（建物名・部屋番号）">
+                    <input
+                      value={form.address3}
+                      onChange={e => setForm(f => ({ ...f, address3: e.target.value }))}
+                      placeholder="例: ○○マンション 101号室"
+                      className={inputCls}
+                    />
+                    <p className="text-xs text-gray-400 mt-0.5">マンション名・部屋番号など（任意）</p>
+                  </Field>
+                </div>
+                {(form.address1 || form.address2) && (
+                  <div className="col-span-2">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([form.address1, form.address2, form.address3].filter(Boolean).join(' '))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 underline"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                      Google マップで確認
+                    </a>
+                  </div>
+                )}
                 <div className="col-span-2">
                   <Field label="緊急連絡先">
                     <input
