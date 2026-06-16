@@ -151,6 +151,7 @@ export default function StudentsPage() {
       ...form,
       legacy_id: form.legacy_id !== '' ? Number(form.legacy_id) : null,
       joined_at: form.joined_at || null,
+      birthdate: form.birthdate || null,
       postal_code: form.postal_code || null,
     }
 
