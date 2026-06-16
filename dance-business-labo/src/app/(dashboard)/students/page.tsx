@@ -228,8 +228,8 @@ export default function StudentsPage() {
 
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
-          { label: '全生徒', count: students.length, icon: Users, color: 'bg-indigo-50 text-indigo-600', filter: 'all' },
           { label: '在籍中', count: activeCount, icon: UserCheck, color: 'bg-green-50 text-green-600', filter: 'active' },
+          { label: '全生徒', count: students.length, icon: Users, color: 'bg-indigo-50 text-indigo-600', filter: 'all' },
           { label: '休会中', count: inactiveCount, icon: UserMinus, color: 'bg-gray-50 text-gray-500', filter: 'inactive' },
         ].map(({ label, count, icon: Icon, color, filter }) => (
           <button
@@ -277,7 +277,7 @@ export default function StudentsPage() {
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">参加者ID</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">電話番号</th>
                 <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">体験レッスン日</th>
-                <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">最終来院日</th>
+                <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">最終参加日</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">状態</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
