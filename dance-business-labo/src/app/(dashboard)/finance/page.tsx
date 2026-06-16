@@ -145,6 +145,7 @@ export default function FinancePage() {
     const { data } = await supabase
       .from('transactions')
       .select('transaction_date, type, amount')
+      .limit(100000)
     if (!data) return
     const map: Record<number, { income: number; expense: number }> = {}
     for (const t of data) {
@@ -531,7 +532,7 @@ export default function FinancePage() {
                           <td className={`px-3 py-2.5 font-medium ${t.type === 'income' ? 'text-green-700' : 'text-red-600'}`}>
                             {t.type === 'expense' ? '-' : ''}¥{t.amount.toLocaleString()}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-400">
+                          <td className="px-3 py-2.5 text-gray-400 hidden md:table-cell">
                             {(() => {
                               const sid = parseStudentId(t.description)
                               const sName = sid != null ? studentMap.get(sid) : null
