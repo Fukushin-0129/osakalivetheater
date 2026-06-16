@@ -142,19 +142,13 @@ export default function FinancePage() {
   const supabase = createClient()
 
   async function loadAllYears() {
-    const { data } = await supabase
-      .from('transactions')
-      .select('transaction_date, type, amount')
-      .limit(100000)
+    const { data } = await supabase.rpc('get_yearly_totals')
     if (!data) return
-    const map: Record<number, { income: number; expense: number }> = {}
-    for (const t of data) {
-      const y = Number(t.transaction_date.slice(0, 4))
-      if (!map[y]) map[y] = { income: 0, expense: 0 }
-      if (t.type === 'income') map[y].income += t.amount
-      else map[y].expense += t.amount
-    }
-    setAllYearlyTotals(Object.entries(map).map(([y, v]) => ({ year: Number(y), ...v })).sort((a, b) => a.year - b.year))
+    setAllYearlyTotals((data as { year: number; income: number; expense: number }[]).map(r => ({
+      year: r.year,
+      income: Number(r.income),
+      expense: Number(r.expense),
+    })))
   }
 
   async function load() {
