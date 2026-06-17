@@ -330,7 +330,7 @@ export default function StudentsPage() {
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">参加者ID</th>
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">電話番号</th>
                 <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">体験レッスン日</th>
-                <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">最終参加日</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">最終参加日</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">状態</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -372,7 +372,7 @@ export default function StudentsPage() {
                   <td className="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">
                     {s.joined_at ? new Date(s.joined_at).toLocaleDateString('ja-JP') : '—'}
                   </td>
-                  <td className="px-4 py-3 text-gray-400 text-xs hidden md:table-cell">{lastAttendedMap.get(s.id) ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs">{lastAttendedMap.get(s.id) ? new Date(lastAttendedMap.get(s.id)!).toLocaleDateString('ja-JP') : '—'}</td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => toggleActive(s)}
