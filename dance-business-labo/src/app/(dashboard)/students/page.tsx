@@ -56,7 +56,7 @@ export default function StudentsPage() {
     setLoading(true)
     const [{ data: stuData }, { data: attData }] = await Promise.all([
       supabase.from('students').select('*'),
-      supabase.from('attendance').select('student_id, lessons(scheduled_at)').eq('status', 'present'),
+      supabase.from('attendance').select('student_id, lessons(scheduled_at)'),
     ])
     const stuList = stuData ?? []
     setStudents(stuList)
