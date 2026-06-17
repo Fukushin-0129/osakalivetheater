@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Student } from '@/types/database'
-import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, X, Loader2, Camera } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, X, Loader2, Camera, Check } from 'lucide-react'
 import Link from 'next/link'
+import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
 
 type FilterStatus = 'all' | 'active' | 'inactive'
 
@@ -44,6 +46,10 @@ export default function StudentsPage() {
   const [signedAvatarMap, setSignedAvatarMap] = useState<Map<string, string>>(new Map())
   const [zipLoading, setZipLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
+  const [crop, setCrop] = useState<Crop>()
+  const [cropFileName, setCropFileName] = useState('')
+  const imgRef = useRef<HTMLImageElement>(null)
   const supabase = createClient()
 
   async function load() {
@@ -134,9 +140,49 @@ export default function StudentsPage() {
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setAvatarFile(file)
-    setAvatarPreview(URL.createObjectURL(file))
+    setCropFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => setCropSrc(reader.result as string)
+    reader.readAsDataURL(file)
+    e.target.value = ''
   }
+
+  function onCropImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const { width, height } = e.currentTarget
+    const c = centerCrop(makeAspectCrop({ unit: '%', width: 80 }, 1, width, height), width, height)
+    setCrop(c)
+  }
+
+  const confirmCrop = useCallback(() => {
+    if (!imgRef.current || !crop) return
+    const canvas = document.createElement('canvas')
+    const scaleX = imgRef.current.naturalWidth / imgRef.current.width
+    const scaleY = imgRef.current.naturalHeight / imgRef.current.height
+    const pixelRatio = window.devicePixelRatio || 1
+    const cropW = (crop.unit === '%' ? crop.width / 100 * imgRef.current.width : crop.width)
+    const cropH = (crop.unit === '%' ? crop.height / 100 * imgRef.current.height : crop.height)
+    const cropX = (crop.unit === '%' ? crop.x / 100 * imgRef.current.width : crop.x)
+    const cropY = (crop.unit === '%' ? crop.y / 100 * imgRef.current.height : crop.y)
+    canvas.width = cropW * scaleX * pixelRatio
+    canvas.height = cropH * scaleY * pixelRatio
+    const ctx = canvas.getContext('2d')!
+    ctx.scale(pixelRatio, pixelRatio)
+    ctx.drawImage(
+      imgRef.current,
+      cropX * scaleX, cropY * scaleY,
+      cropW * scaleX, cropH * scaleY,
+      0, 0, cropW * scaleX, cropH * scaleY
+    )
+    canvas.toBlob(blob => {
+      if (!blob) return
+      const ext = cropFileName.split('.').pop() ?? 'jpg'
+      const file = new File([blob], cropFileName, { type: `image/${ext === 'png' ? 'png' : 'jpeg'}` })
+      setAvatarFile(file)
+      setAvatarPreview(URL.createObjectURL(blob))
+      setCropSrc(null)
+    }, 'image/jpeg', 0.9)
+  }, [crop, cropFileName])
+
 
   async function uploadAvatar(file: File, studentId: string): Promise<string | null> {
     const ext = file.name.split('.').pop() ?? 'jpg'
@@ -361,6 +407,29 @@ export default function StudentsPage() {
           </div>
         )}
       </div>
+
+      {/* 画像クロップモーダル */}
+      {cropSrc && (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col gap-4 p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-800">画像の範囲を調整</h3>
+              <button onClick={() => setCropSrc(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="flex justify-center max-h-[60vh] overflow-auto">
+              <ReactCrop crop={crop} onChange={c => setCrop(c)} keepSelection>
+                <img ref={imgRef} src={cropSrc} alt="crop" onLoad={onCropImageLoad} className="max-w-full max-h-[55vh] object-contain" />
+              </ReactCrop>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setCropSrc(null)} className="px-4 py-2 text-sm border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50">キャンセル</button>
+              <button onClick={confirmCrop} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center gap-1.5">
+                <Check size={14} />この範囲で確定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
