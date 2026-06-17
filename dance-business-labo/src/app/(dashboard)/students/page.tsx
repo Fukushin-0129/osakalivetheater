@@ -303,9 +303,9 @@ export default function StudentsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {signedAvatarMap.get(s.id) ? (
-                        <img src={signedAvatarMap.get(s.id)} alt={s.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                        <img src={signedAvatarMap.get(s.id)} alt={s.name} className="w-7 h-7 rounded object-cover flex-shrink-0" />
                       ) : (
-                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                        <div className="w-7 h-7 rounded bg-indigo-100 flex items-center justify-center flex-shrink-0">
                           <span className="text-indigo-600 text-xs font-bold">{s.name.charAt(0)}</span>
                         </div>
                       )}
@@ -379,18 +379,18 @@ export default function StudentsPage() {
               <div className="flex items-center gap-4">
                 <div className="relative">
                   {avatarPreview ? (
-                    <img src={avatarPreview} alt="avatar" className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" />
+                    <img src={avatarPreview} alt="avatar" className="w-32 h-32 rounded-lg object-cover border-2 border-gray-200" />
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center border-2 border-dashed border-indigo-300">
-                      <Camera size={20} className="text-indigo-400" />
+                    <div className="w-32 h-32 rounded-lg bg-indigo-100 flex items-center justify-center border-2 border-dashed border-indigo-300">
+                      <Camera size={32} className="text-indigo-400" />
                     </div>
                   )}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 bg-indigo-600 text-white rounded-full p-1 shadow-sm hover:bg-indigo-700"
+                    className="absolute -bottom-1 -right-1 bg-indigo-600 text-white rounded-full p-1.5 shadow-sm hover:bg-indigo-700"
                   >
-                    <Camera size={12} />
+                    <Camera size={14} />
                   </button>
                   <input
                     ref={fileInputRef}
