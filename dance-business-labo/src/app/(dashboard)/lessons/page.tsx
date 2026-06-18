@@ -199,11 +199,12 @@ export default function LessonsPage() {
     return groups
   }, [lessons])
 
-  const todayMonth = new Date().toISOString().slice(0, 7)
-  const sortedMonths = Object.keys(groupedLessons).sort()
-  const nearestMonth = sortedMonths.find(m => m >= todayMonth) ?? sortedMonths[sortedMonths.length - 1]
-
   const today = new Date()
+  const todayMonth = today.toISOString().slice(0, 7)
+  const allMonths = Object.keys(groupedLessons).sort()
+  const futureMonths = allMonths.filter(m => m >= todayMonth)
+  const pastMonths = allMonths.filter(m => m < todayMonth).reverse()
+  const nearestMonth = futureMonths[0] ?? pastMonths[0]
 
   return (
     <div>
@@ -292,13 +293,14 @@ export default function LessonsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {sortedMonths.length === 0 && (
+          {allMonths.length === 0 && (
             <div className="bg-white rounded-xl shadow-sm p-12 text-center text-gray-400">
               <Calendar size={36} className="mx-auto mb-3 opacity-20" />
               <p className="text-sm">レッスンが登録されていません</p>
             </div>
           )}
-          {sortedMonths.map(month => {
+          {/* 未来（今月以降）: 昇順 */}
+          {futureMonths.map(month => {
             const ls = groupedLessons[month]
             const isNearToday = month === nearestMonth
             return (
@@ -362,6 +364,72 @@ export default function LessonsPage() {
               </div>
             )
           })}
+          {/* 過去: 降順（最新が上） */}
+          {pastMonths.length > 0 && (
+            <div className="border-t border-dashed border-gray-200 pt-4">
+              <p className="text-xs text-gray-400 mb-4 px-1">過去のレッスン</p>
+              {pastMonths.map(month => {
+                const ls = [...groupedLessons[month]].reverse()
+                return (
+                  <div key={month} id={`month-${month}`} className="mb-6">
+                    <h2 className="text-sm font-semibold mb-2 px-1 text-gray-400">
+                      {month.replace('-', '年')}月
+                    </h2>
+                    <div className="bg-white rounded-xl shadow-sm overflow-hidden opacity-70">
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-50">
+                          {ls.map(l => {
+                            const dt = new Date(l.scheduled_at)
+                            const lt = l.lesson_types as LessonType | null
+                            const presentList = l.attendance?.filter(a => a.status === 'present' || a.status === 'late') ?? []
+                            const attendCount = presentList.length
+                            const cap = l.max_capacity ?? 0
+                            return (
+                              <tr key={l.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-4 py-3 w-28 text-gray-500 text-xs whitespace-nowrap align-top">
+                                  <div className="font-medium text-gray-500">
+                                    {dt.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                                    （{WEEKDAYS[dt.getDay()]}）
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5 text-gray-400">
+                                    <Clock size={11} />
+                                    {dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 align-top">
+                                  <div className="font-medium text-gray-600">{l.title}</div>
+                                  {lt && <span className="inline-block mt-0.5 px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">{lt.name}</span>}
+                                </td>
+                                <td className="px-4 py-3 hidden md:table-cell align-top">
+                                  {l.location && <div className="flex items-center gap-1 text-gray-400 text-xs"><MapPin size={12} /> {l.location}</div>}
+                                </td>
+                                <td className="px-4 py-3 align-top">
+                                  <button onClick={() => openAttendees(l)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors mb-1.5">
+                                    <Users size={12} className="flex-shrink-0" />
+                                    <span className="font-semibold">{attendCount}</span>
+                                    <span className="text-gray-300">/ {cap}名</span>
+                                  </button>
+                                  <div className="flex flex-wrap gap-1">
+                                    {presentList.map((a, i) => (
+                                      <span key={i} className="inline-block px-1.5 py-0.5 bg-gray-50 text-gray-400 text-xs rounded">{a.students?.name ?? '—'}</span>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right whitespace-nowrap">
+                                  <button onClick={() => openEdit(l)} className="text-gray-300 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors"><Pencil size={14} /></button>
+                                  <button onClick={() => handleDelete(l)} className="text-gray-300 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
