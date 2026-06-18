@@ -271,7 +271,7 @@ export default function LessonsPage() {
       {/* 年タブ */}
       {yearRange.length > 0 && (
         <div className="flex gap-1 overflow-x-auto pb-1 mb-4 scrollbar-none">
-          {yearRange.map(year => (
+          {[...yearRange].reverse().map(year => (
             <button
               key={year}
               onClick={() => changeYear(year)}
