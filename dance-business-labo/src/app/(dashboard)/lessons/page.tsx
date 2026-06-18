@@ -39,6 +39,8 @@ export default function LessonsPage() {
   const [loadingImport, setLoadingImport] = useState(false)
   const [editing, setEditing] = useState<Lesson | null>(null)
   const [calendarDate, setCalendarDate] = useState(new Date())
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [yearRange, setYearRange] = useState<number[]>([])
   const [form, setForm] = useState({
     title: '',
     lesson_type_id: '',
@@ -49,10 +51,26 @@ export default function LessonsPage() {
   })
   const supabase = createClient()
 
-  async function load() {
+  async function loadYears() {
+    const [{ data: first }, { data: last }] = await Promise.all([
+      supabase.from('lessons').select('scheduled_at').order('scheduled_at', { ascending: true }).limit(1),
+      supabase.from('lessons').select('scheduled_at').order('scheduled_at', { ascending: false }).limit(1),
+    ])
+    if (first?.[0] && last?.[0]) {
+      const minYear = new Date(first[0].scheduled_at).getFullYear()
+      const maxYear = new Date(last[0].scheduled_at).getFullYear()
+      const years: number[] = []
+      for (let y = minYear; y <= maxYear; y++) years.push(y)
+      setYearRange(years)
+    }
+  }
+
+  async function load(year = selectedYear) {
     setLoading(true)
+    const start = `${year}-01-01T00:00:00`
+    const end = `${year + 1}-01-01T00:00:00`
     const [{ data: l }, { data: lt }] = await Promise.all([
-      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana))').order('scheduled_at', { ascending: true }).limit(5000),
+      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana))').gte('scheduled_at', start).lt('scheduled_at', end).order('scheduled_at', { ascending: true }),
       supabase.from('lesson_types').select('*').order('name'),
     ])
     setLessons((l ?? []) as LessonWithCount[])
@@ -60,7 +78,12 @@ export default function LessonsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { loadYears(); load() }, [])
+
+  function changeYear(year: number) {
+    setSelectedYear(year)
+    load(year)
+  }
 
   function openNew() {
     setEditing(null)
@@ -245,6 +268,25 @@ export default function LessonsPage() {
         </div>
       </div>
 
+      {/* 年タブ */}
+      {yearRange.length > 0 && (
+        <div className="flex gap-1 overflow-x-auto pb-1 mb-4 scrollbar-none">
+          {yearRange.map(year => (
+            <button
+              key={year}
+              onClick={() => changeYear(year)}
+              className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                year === selectedYear
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white text-gray-500 hover:bg-gray-100 border border-gray-200'
+              }`}
+            >
+              {year}年
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-white rounded-xl shadow-sm flex items-center justify-center py-20 text-gray-400">
           <Loader2 size={24} className="animate-spin mr-2" /> 読み込み中...
@@ -299,6 +341,7 @@ export default function LessonsPage() {
               <p className="text-sm">レッスンが登録されていません</p>
             </div>
           )}
+          {/* 今月以降: 昇順 */}
           {futureMonths.map(month => {
             const ls = groupedLessons[month]
             const isNearToday = month === nearestMonth
@@ -363,15 +406,18 @@ export default function LessonsPage() {
               </div>
             )
           })}
+          {/* 先月以前: 降順 */}
           {pastMonths.length > 0 && (
-            <div className="border-t border-dashed border-gray-200 pt-4">
-              <p className="text-xs text-gray-400 mb-4 px-1">過去のレッスン</p>
+            <div className={futureMonths.length > 0 ? 'border-t border-dashed border-gray-200 pt-4' : ''}>
+              {futureMonths.length > 0 && <p className="text-xs text-gray-400 mb-4 px-1">過去のレッスン</p>}
               {pastMonths.map(month => {
                 const ls = [...groupedLessons[month]].reverse()
+                const isNearToday = month === nearestMonth
                 return (
                   <div key={month} id={`month-${month}`} className="mb-6">
-                    <h2 className="text-sm font-semibold mb-2 px-1 text-gray-400">
+                    <h2 className={`text-sm font-semibold mb-2 px-1 flex items-center gap-2 ${isNearToday ? 'text-indigo-600' : 'text-gray-500'}`}>
                       {month.replace('-', '年')}月
+                      {isNearToday && <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">今月</span>}
                     </h2>
                     <div className="bg-white rounded-xl shadow-sm overflow-hidden opacity-70">
                       <table className="w-full text-sm">
