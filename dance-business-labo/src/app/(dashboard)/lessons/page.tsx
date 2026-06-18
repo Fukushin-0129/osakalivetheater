@@ -52,7 +52,7 @@ export default function LessonsPage() {
   async function load() {
     setLoading(true)
     const [{ data: l }, { data: lt }] = await Promise.all([
-      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana))').order('scheduled_at', { ascending: true }),
+      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana))').order('scheduled_at', { ascending: true }).limit(5000),
       supabase.from('lesson_types').select('*').order('name'),
     ])
     setLessons((l ?? []) as LessonWithCount[])
@@ -299,7 +299,6 @@ export default function LessonsPage() {
               <p className="text-sm">レッスンが登録されていません</p>
             </div>
           )}
-          {/* 未来（今月以降）: 昇順 */}
           {futureMonths.map(month => {
             const ls = groupedLessons[month]
             const isNearToday = month === nearestMonth
@@ -364,7 +363,6 @@ export default function LessonsPage() {
               </div>
             )
           })}
-          {/* 過去: 降順（最新が上） */}
           {pastMonths.length > 0 && (
             <div className="border-t border-dashed border-gray-200 pt-4">
               <p className="text-xs text-gray-400 mb-4 px-1">過去のレッスン</p>
