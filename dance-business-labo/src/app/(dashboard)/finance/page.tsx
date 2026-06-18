@@ -107,6 +107,7 @@ function MultiDateCalendar({ selected, onChange }: { selected: Set<string>; onCh
 
 const initLessonForm = () => ({
   lesson_dates: new Set<string>(),
+  use_lesson_date: true,
   payment_date: new Date().toISOString().split('T')[0],
   venue: DEFAULT_VENUE,
   amount: '',
@@ -116,6 +117,13 @@ function parseStudentId(description: string | null): number | null {
   if (!description) return null
   const m = description.match(/参加者ID:(\d+)/)
   return m ? Number(m[1]) : null
+}
+
+function parseLessonDesc(description: string | null): { venue: string; lessonDate: string | null } | null {
+  if (!description) return null
+  const m = description.match(/^(.+?)(?:（レッスン日:\s*(\d{4}-\d{2}-\d{2})）)?$/)
+  if (!m) return null
+  return { venue: m[1].trim(), lessonDate: m[2] ?? null }
 }
 
 type YearlyTotal = { year: number; income: number; expense: number }
@@ -195,7 +203,7 @@ export default function FinancePage() {
     setSaving(true)
     const sortedDates = [...lessonForm.lesson_dates].sort()
     const rows = sortedDates.map(date => ({
-      transaction_date: lessonForm.payment_date,
+      transaction_date: lessonForm.use_lesson_date ? date : lessonForm.payment_date,
       type: 'expense',
       category: 'レッスン場代',
       amount: Number(lessonForm.amount),
@@ -528,6 +536,19 @@ export default function FinancePage() {
                           </td>
                           <td className="px-3 py-2.5 text-gray-400 hidden md:table-cell">
                             {(() => {
+                              if (t.category === 'レッスン場代') {
+                                const parsed = parseLessonDesc(t.description)
+                                return (
+                                  <div className="text-xs space-y-0.5">
+                                    {parsed?.venue && <div className="text-gray-600">{parsed.venue}</div>}
+                                    {parsed?.lessonDate && (
+                                      <div className="text-orange-600 font-medium">
+                                        レッスン日: {new Date(parsed.lessonDate).toLocaleDateString('ja-JP')}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              }
                               const sid = parseStudentId(t.description)
                               const sName = sid != null ? studentMap.get(sid) : null
                               return sName
@@ -584,15 +605,38 @@ export default function FinancePage() {
                 )}
               </div>
 
-              {/* 支払日 */}
-              <div>
-                <label className="text-xs font-medium text-gray-600">支払日</label>
-                <input
-                  type="date"
-                  value={lessonForm.payment_date}
-                  onChange={e => setLessonForm(f => ({ ...f, payment_date: e.target.value }))}
-                  className={`mt-1 ${inputCls}`}
-                />
+              {/* 取引日の設定 */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-gray-600">取引日の設定</label>
+                <div className="flex rounded-xl border border-gray-200 overflow-hidden text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setLessonForm(f => ({ ...f, use_lesson_date: true }))}
+                    className={`flex-1 py-2 font-medium transition-colors ${lessonForm.use_lesson_date ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    レッスン日
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLessonForm(f => ({ ...f, use_lesson_date: false }))}
+                    className={`flex-1 py-2 font-medium transition-colors ${!lessonForm.use_lesson_date ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    支払日
+                  </button>
+                </div>
+                {!lessonForm.use_lesson_date && (
+                  <input
+                    type="date"
+                    value={lessonForm.payment_date}
+                    onChange={e => setLessonForm(f => ({ ...f, payment_date: e.target.value }))}
+                    className={inputCls}
+                  />
+                )}
+                <p className="text-xs text-gray-400">
+                  {lessonForm.use_lesson_date
+                    ? '各レッスン日が取引日として記録されます'
+                    : '全レッスンが同じ支払日で記録されます'}
+                </p>
               </div>
 
               {/* 会場 */}
