@@ -56,7 +56,7 @@ export default function StudentsPage() {
     setLoading(true)
     const [{ data: stuData }, { data: attData }] = await Promise.all([
       supabase.from('students').select('*'),
-      supabase.from('attendance').select('student_id, lessons(scheduled_at)'),
+      supabase.rpc('get_last_attended_dates'),
     ])
     const stuList = stuData ?? []
     setStudents(stuList)
@@ -74,11 +74,8 @@ export default function StudentsPage() {
     }
 
     const map = new Map<string, string>()
-    for (const a of (attData ?? []) as unknown as { student_id: string; lessons: { scheduled_at: string } | null }[]) {
-      const date = a.lessons?.scheduled_at?.slice(0, 10)
-      if (!date) continue
-      const prev = map.get(a.student_id)
-      if (!prev || date > prev) map.set(a.student_id, date)
+    for (const a of (attData ?? []) as { student_id: string; last_attended: string }[]) {
+      if (a.last_attended) map.set(a.student_id, a.last_attended)
     }
     setLastAttendedMap(map)
     setLoading(false)
