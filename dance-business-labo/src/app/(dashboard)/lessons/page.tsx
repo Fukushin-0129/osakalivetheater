@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType } from '@/types/database'
-import { Plus, Pencil, Trash2, Calendar, List, ChevronLeft, ChevronRight, Clock, MapPin, Users, X, Loader2, Download } from 'lucide-react'
+import { Plus, Pencil, Trash2, Calendar, List, ChevronLeft, ChevronRight, Clock, MapPin, Users, X, Loader2, Download, BookOpen } from 'lucide-react'
+import Link from 'next/link'
 
 type ViewMode = 'list' | 'calendar'
 type AttendanceWithStudent = { count: number; students: { name: string; name_kana: string | null } | null; status: string }
@@ -394,6 +395,7 @@ export default function LessonsPage() {
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right whitespace-nowrap">
+                              <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 mr-2 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors font-medium"><BookOpen size={13} /> 計画・評価</Link>
                               <button onClick={() => openEdit(l)} className="text-gray-400 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors"><Pencil size={14} /></button>
                               <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                             </td>
@@ -460,6 +462,7 @@ export default function LessonsPage() {
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-right whitespace-nowrap">
+                                  <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 mr-2 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"><BookOpen size={13} /> 計画・評価</Link>
                                   <button onClick={() => openEdit(l)} className="text-gray-300 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors"><Pencil size={14} /></button>
                                   <button onClick={() => handleDelete(l)} className="text-gray-300 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                                 </td>
