@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   X,
+  BookOpen,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/', label: 'ダッシュボード', icon: LayoutDashboard },
   { href: '/students', label: '生徒管理', icon: Users },
   { href: '/lessons', label: 'レッスン', icon: Calendar },
+  { href: '/curriculum', label: 'カリキュラム', icon: BookOpen },
   { href: '/attendance', label: '出席管理', icon: ClipboardCheck },
   { href: '/tickets', label: 'チケット', icon: Ticket },
   { href: '/records', label: 'カルテ', icon: FileText },
