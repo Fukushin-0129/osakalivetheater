@@ -85,6 +85,39 @@ export type StudentRecord = {
   students?: Student
 }
 
+export type CurriculumItem = {
+  id: string
+  parent_id: string | null
+  name: string
+  level: 1 | 2 | 3
+  display_order: number
+  created_at: string
+  children?: CurriculumItem[]
+}
+
+export type LessonPlanItem = {
+  id: string
+  lesson_id: string
+  curriculum_item_id: string
+  plan_notes: string | null
+  display_order: number
+  created_at: string
+  curriculum_items?: CurriculumItem
+}
+
+export type LessonEvaluation = {
+  id: string
+  lesson_id: string
+  student_id: string
+  curriculum_item_id: string
+  rating: number | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+  curriculum_items?: CurriculumItem
+  students?: Student
+}
+
 export type TransactionType = 'income' | 'expense'
 
 export type Transaction = {
