@@ -7,6 +7,13 @@ import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCi
 import Link from 'next/link'
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
+
+function parseJST(s: string): Date {
+  const clean = s.slice(0, 16).replace(' ', 'T')
+  const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
+  const [h, min] = clean.slice(11).split(':').map(Number)
+  return new Date(y, m - 1, d, h, min)
+}
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
 
 type Tab = 'plan' | 'evaluation'
@@ -129,7 +136,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
     // カルテに自動書き込み
     if (lesson) {
-      const lessonDate = new Date(lesson.scheduled_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
+      const lessonDate = parseJST(lesson.scheduled_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
       for (const att of attendingStudents) {
         const studentId = att.student_id
         const studentEvals = evalMap[studentId]
@@ -151,7 +158,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
         if (lines.length > 1) {
           await supabase.from('student_records').insert({
             student_id: studentId,
-            record_date: new Date(lesson.scheduled_at).toISOString().slice(0, 10),
+            record_date: lesson.scheduled_at.slice(0, 10),
             content: lines.join('\n'),
           })
         }
@@ -186,7 +193,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
   if (!lesson) return <div className="text-gray-500 p-8">レッスンが見つかりません</div>
 
-  const dt = new Date(lesson.scheduled_at)
+  const dt = parseJST(lesson.scheduled_at)
   const lessonLabel = `${dt.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}（${WEEKDAYS[dt.getDay()]}）${dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} ${lesson.title}`
 
   return (

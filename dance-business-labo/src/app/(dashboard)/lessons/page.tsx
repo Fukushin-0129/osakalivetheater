@@ -18,8 +18,18 @@ const DEFAULT_TIMES = ['19:00', '20:15']
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 
+// DBに保存されたタイムスタンプはタイムゾーンなし文字列として扱い、
+// そのまま日本時間として解釈する（UTC変換しない）
+function parseJST(s: string): Date {
+  const clean = s.slice(0, 16).replace(' ', 'T')
+  const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
+  const [h, min] = clean.slice(11).split(':').map(Number)
+  return new Date(y, m - 1, d, h, min)
+}
+
 function todayStr() {
-  return new Date().toISOString().split('T')[0]
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
 }
 
 export default function LessonsPage() {
@@ -58,8 +68,8 @@ export default function LessonsPage() {
       supabase.from('lessons').select('scheduled_at').order('scheduled_at', { ascending: false }).limit(1),
     ])
     if (first?.[0] && last?.[0]) {
-      const minYear = new Date(first[0].scheduled_at).getFullYear()
-      const maxYear = new Date(last[0].scheduled_at).getFullYear()
+      const minYear = parseJST(first[0].scheduled_at).getFullYear()
+      const maxYear = parseJST(last[0].scheduled_at).getFullYear()
       const years: number[] = []
       for (let y = minYear; y <= maxYear; y++) years.push(y)
       setYearRange(years)
@@ -173,7 +183,7 @@ export default function LessonsPage() {
   }
 
   async function openAttendees(l: LessonWithCount) {
-    const dt = new Date(l.scheduled_at)
+    const dt = parseJST(l.scheduled_at)
     setAttendeeModal({
       lessonId: l.id,
       lessonTitle: l.title,
@@ -197,7 +207,7 @@ export default function LessonsPage() {
   const calendarLessons = useMemo(() => {
     const map: Record<string, Lesson[]> = {}
     for (const l of lessons) {
-      const d = new Date(l.scheduled_at)
+      const d = parseJST(l.scheduled_at)
       if (d.getFullYear() === calYear && d.getMonth() === calMonth) {
         const key = d.getDate().toString()
         if (!map[key]) map[key] = []
@@ -224,7 +234,7 @@ export default function LessonsPage() {
   }, [lessons])
 
   const today = new Date()
-  const todayMonth = today.toISOString().slice(0, 7)
+  const todayMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
   const allMonths = Object.keys(groupedLessons).sort()
   const futureMonths = allMonths.filter(m => m >= todayMonth)
   const pastMonths = allMonths.filter(m => m < todayMonth).reverse()
@@ -325,7 +335,7 @@ export default function LessonsPage() {
                   <div className="space-y-0.5">
                     {dayLessons.map(l => (
                       <button key={l.id} onClick={() => openEdit(l)} className="w-full text-left px-1.5 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-xs leading-tight truncate transition-colors" title={l.title}>
-                        {new Date(l.scheduled_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {l.title}
+                        {parseJST(l.scheduled_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {l.title}
                       </button>
                     ))}
                   </div>
@@ -356,7 +366,7 @@ export default function LessonsPage() {
                   <table className="w-full text-sm">
                     <tbody className="divide-y divide-gray-50">
                       {ls.map(l => {
-                        const dt = new Date(l.scheduled_at)
+                        const dt = parseJST(l.scheduled_at)
                         const isPast = dt < today
                         const isToday = dt.toDateString() === today.toDateString()
                         const lt = l.lesson_types as LessonType | null
@@ -425,7 +435,7 @@ export default function LessonsPage() {
                       <table className="w-full text-sm">
                         <tbody className="divide-y divide-gray-50">
                           {ls.map(l => {
-                            const dt = new Date(l.scheduled_at)
+                            const dt = parseJST(l.scheduled_at)
                             const lt = l.lesson_types as LessonType | null
                             const presentList = l.attendance?.filter(a => a.status === 'present' || a.status === 'late') ?? []
                             const attendCount = presentList.length
