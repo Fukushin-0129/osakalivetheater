@@ -14,6 +14,7 @@ export default function CurriculumPage() {
   const supabase = createClient()
   const [tree, setTree] = useState<TreeItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
@@ -23,12 +24,18 @@ export default function CurriculumPage() {
 
   useEffect(() => { load() }, [])
 
-  async function load() {
-    setLoading(true)
-    const { data } = await supabase.from('curriculum_items').select('*').order('level').order('display_order').order('created_at')
+  async function load(silent = false) {
+    if (!silent) setLoading(true)
+    else setRefreshing(true)
+    const { data, error } = await supabase.from('curriculum_items').select('*').order('level').order('display_order').order('created_at')
+    if (error) {
+      console.error('curriculum load error:', error)
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
     const flat: CurriculumItem[] = data ?? []
-
-    const roots: TreeItem[] = flat.filter(i => !i.parent_id).map(i => ({ ...i, children: [] }))
+    const roots: TreeItem[] = flat.filter(i => i.parent_id === null).map(i => ({ ...i, children: [] }))
     for (const root of roots) {
       root.children = flat
         .filter(i => i.parent_id === root.id)
@@ -39,6 +46,7 @@ export default function CurriculumPage() {
     }
     setTree(roots)
     setLoading(false)
+    setRefreshing(false)
   }
 
   function toggleExpand(id: string) {
@@ -58,31 +66,36 @@ export default function CurriculumPage() {
   async function saveEdit(id: string) {
     if (!editName.trim()) return
     setSaving(true)
-    await supabase.from('curriculum_items').update({ name: editName.trim() }).eq('id', id)
+    const { error } = await supabase.from('curriculum_items').update({ name: editName.trim() }).eq('id', id)
     setSaving(false)
+    if (error) { alert(`更新エラー: ${error.message}`); return }
     setEditingId(null)
-    load()
+    load(true)
   }
 
   async function deleteItem(id: string) {
     if (!confirm('この項目と配下の項目をすべて削除しますか？\nレッスン計画・評価データも削除されます。')) return
-    await supabase.from('curriculum_items').delete().eq('id', id)
-    load()
+    const { error } = await supabase.from('curriculum_items').delete().eq('id', id)
+    if (error) { alert(`削除エラー: ${error.message}`); return }
+    load(true)
   }
 
   async function addItem() {
-    if (!newName.trim() || !addingTo) return
+    const name = newName.trim()
+    const target = addingTo
+    if (!name || !target) return
     setSaving(true)
-    await supabase.from('curriculum_items').insert({
-      parent_id: addingTo.parentId,
-      name: newName.trim(),
-      level: addingTo.level,
+    const { error } = await supabase.from('curriculum_items').insert({
+      parent_id: target.parentId,
+      name,
+      level: target.level,
       display_order: 99,
     })
     setSaving(false)
+    if (error) { alert(`追加エラー: ${error.message}`); return }
     setAddingTo(null)
     setNewName('')
-    load()
+    load(true)
   }
 
   function startAdd(parentId: string | null, level: number) {
@@ -103,7 +116,10 @@ export default function CurriculumPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">カリキュラム管理</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-800">カリキュラム管理</h1>
+            {refreshing && <Loader2 size={16} className="animate-spin text-indigo-400" />}
+          </div>
           <p className="text-gray-500 text-sm mt-0.5">レッスン計画・評価で使用する大・中・小項目を管理します</p>
         </div>
         <button
