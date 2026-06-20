@@ -193,6 +193,9 @@ export default function CurriculumPage() {
             if (e.key === 'Enter') saveEdit(id)
             if (e.key === 'Escape') setEditingId(null)
           }}
+          onMouseDown={e => e.stopPropagation()}
+          onDragStart={e => e.preventDefault()}
+          draggable={false}
           className={cls}
           autoFocus
         />
@@ -238,6 +241,9 @@ export default function CurriculumPage() {
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
+                                  onMouseDown={e => e.stopPropagation()}
+                                  onDragStart={e => e.preventDefault()}
+                                  draggable={false}
             placeholder="大項目名を入力"
             className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             autoFocus
@@ -385,6 +391,9 @@ export default function CurriculumPage() {
                                   value={newName}
                                   onChange={e => setNewName(e.target.value)}
                                   onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
+                                  onMouseDown={e => e.stopPropagation()}
+                                  onDragStart={e => e.preventDefault()}
+                                  draggable={false}
                                   placeholder="小項目名を入力"
                                   className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                   autoFocus
@@ -413,6 +422,9 @@ export default function CurriculumPage() {
                         value={newName}
                         onChange={e => setNewName(e.target.value)}
                         onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
+                                  onMouseDown={e => e.stopPropagation()}
+                                  onDragStart={e => e.preventDefault()}
+                                  draggable={false}
                         placeholder="中項目名を入力"
                         className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         autoFocus
