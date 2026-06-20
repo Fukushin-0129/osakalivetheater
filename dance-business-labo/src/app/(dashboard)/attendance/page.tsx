@@ -33,8 +33,10 @@ export default function AttendancePage() {
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 
-  // 現金入力状態: studentId → { open, amount, saving, saved }
-  const [cashState, setCashState] = useState<Record<string, { open: boolean; amount: string; saving: boolean; saved: boolean }>>({})
+  const CASH_CATEGORIES = ['レッスン収入', '出演収入', '入会金', '発表会参加費', 'グッズ販売', 'その他']
+
+  // 現金入力状態: studentId → { open, amount, category, saving, saved, savedLabel }
+  const [cashState, setCashState] = useState<Record<string, { open: boolean; amount: string; category: string; saving: boolean; saved: boolean; savedLabel?: string }>>({})
 
   const supabase = createClient()
 
@@ -103,7 +105,7 @@ export default function AttendancePage() {
     setCashState(prev => {
       const cur = prev[studentId]
       if (cur?.open) return { ...prev, [studentId]: { ...cur, open: false } }
-      return { ...prev, [studentId]: { open: true, amount: '', saving: false, saved: false } }
+      return { ...prev, [studentId]: { open: true, amount: '', category: 'レッスン収入', saving: false, saved: false } }
     })
   }
 
@@ -111,6 +113,7 @@ export default function AttendancePage() {
     const cs = cashState[studentId]
     const amount = parseInt(cs?.amount ?? '', 10)
     if (!amount || amount <= 0) return
+    const category = cs?.category || 'レッスン収入'
     const lessonData = lessons.find(l => l.id === selectedLesson)
     const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
 
@@ -118,7 +121,7 @@ export default function AttendancePage() {
     const { error } = await supabase.from('transactions').insert({
       transaction_date: lessonDate,
       type: 'income',
-      category: 'レッスン収入',
+      category,
       amount,
       description: `現金受取 - ${studentName}（${lessonData?.title ?? 'レッスン'}）`,
     })
@@ -127,11 +130,11 @@ export default function AttendancePage() {
       setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: false } }))
       return
     }
-    setCashState(prev => ({ ...prev, [studentId]: { open: false, amount: '', saving: false, saved: true } }))
-    // 3秒後にsaved表示をリセット
+    const savedLabel = `${category} ¥${amount.toLocaleString()}`
+    setCashState(prev => ({ ...prev, [studentId]: { open: false, amount: '', category: 'レッスン収入', saving: false, saved: true, savedLabel } }))
     setTimeout(() => {
-      setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saved: false } }))
-    }, 3000)
+      setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saved: false, savedLabel: undefined } }))
+    }, 5000)
   }
 
   async function markAllPresent() {
@@ -284,25 +287,34 @@ export default function AttendancePage() {
                         </td>
                         <td className="px-4 py-3">
                           {cs?.open ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-gray-400 text-xs">¥</span>
-                              <input
-                                type="number"
-                                min="0"
-                                value={cs.amount}
-                                onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], amount: e.target.value } }))}
-                                onKeyDown={e => { if (e.key === 'Enter') saveCash(s.id, s.name); if (e.key === 'Escape') toggleCash(s.id) }}
-                                placeholder="金額"
-                                className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"
-                                autoFocus
-                              />
-                              <button onClick={() => saveCash(s.id, s.name)} disabled={cs.saving || !cs.amount}
-                                className="text-green-600 hover:text-green-800 p-1 disabled:opacity-40">
-                                {cs.saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                              </button>
-                              <button onClick={() => toggleCash(s.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                                <X size={13} />
-                              </button>
+                            <div className="flex flex-col gap-1.5 py-0.5">
+                              <select
+                                value={cs.category}
+                                onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], category: e.target.value } }))}
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 bg-white"
+                              >
+                                {CASH_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-gray-400 text-xs">¥</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={cs.amount}
+                                  onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], amount: e.target.value } }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveCash(s.id, s.name); if (e.key === 'Escape') toggleCash(s.id) }}
+                                  placeholder="金額"
+                                  className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"
+                                  autoFocus
+                                />
+                                <button onClick={() => saveCash(s.id, s.name)} disabled={cs.saving || !cs.amount}
+                                  className="text-green-600 hover:text-green-800 p-1 disabled:opacity-40">
+                                  {cs.saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                                </button>
+                                <button onClick={() => toggleCash(s.id)} className="text-gray-400 hover:text-gray-600 p-1">
+                                  <X size={13} />
+                                </button>
+                              </div>
                             </div>
                           ) : (
                             <button onClick={() => toggleCash(s.id)}
@@ -312,7 +324,7 @@ export default function AttendancePage() {
                                   : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'
                               }`}>
                               <JapaneseYen size={12} />
-                              {cs?.saved ? '記録済み' : '現金'}
+                              {cs?.saved ? cs.savedLabel ?? '記録済み' : '現金'}
                             </button>
                           )}
                         </td>
