@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, Student, Attendance } from '@/types/database'
-import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X } from 'lucide-react'
 
 const STATUS_OPTIONS = [
   { value: 'present',   label: '出席',       icon: UserCheck, active: 'bg-green-500 text-white',  inactive: 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600' },
@@ -32,10 +32,13 @@ export default function AttendancePage() {
   const [attendance, setAttendance] = useState<Record<string, Attendance>>({})
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
+
+  // 現金入力状態: studentId → { open, amount, saving, saved }
+  const [cashState, setCashState] = useState<Record<string, { open: boolean; amount: string; saving: boolean; saved: boolean }>>({})
+
   const supabase = createClient()
 
   useEffect(() => {
-    // 過去1年〜2年先の範囲に絞ることでサーバー側の行数上限を回避
     const from = new Date()
     from.setFullYear(from.getFullYear() - 1)
     const to = new Date()
@@ -51,8 +54,6 @@ export default function AttendancePage() {
       const ls = l ?? []
       setLessons(ls)
       setStudents(s ?? [])
-
-      // 今日に最も近いレッスンをデフォルト選択
       if (ls.length > 0) {
         const now = new Date()
         const upcoming = ls.find(lesson => parseJST(lesson.scheduled_at) >= now)
@@ -65,6 +66,7 @@ export default function AttendancePage() {
   useEffect(() => {
     if (!selectedLesson) { setAttendance({}); return }
     setLoadingLesson(true)
+    setCashState({})
     supabase.from('attendance').select('*').eq('lesson_id', selectedLesson).then(({ data }) => {
       const map: Record<string, Attendance> = {}
       for (const a of data ?? []) map[a.student_id] = a
@@ -73,15 +75,10 @@ export default function AttendancePage() {
     })
   }, [selectedLesson])
 
-  // lessons は昇順（古い→新しい）
   const currentIndex = useMemo(() => lessons.findIndex(l => l.id === selectedLesson), [lessons, selectedLesson])
 
-  function goPrev() {
-    if (currentIndex > 0) setSelectedLesson(lessons[currentIndex - 1].id)
-  }
-  function goNext() {
-    if (currentIndex < lessons.length - 1) setSelectedLesson(lessons[currentIndex + 1].id)
-  }
+  function goPrev() { if (currentIndex > 0) setSelectedLesson(lessons[currentIndex - 1].id) }
+  function goNext() { if (currentIndex < lessons.length - 1) setSelectedLesson(lessons[currentIndex + 1].id) }
 
   async function setStatus(studentId: string, status: StatusValue) {
     if (!selectedLesson) return
@@ -102,13 +99,44 @@ export default function AttendancePage() {
     setSavingId(null)
   }
 
+  function toggleCash(studentId: string) {
+    setCashState(prev => {
+      const cur = prev[studentId]
+      if (cur?.open) return { ...prev, [studentId]: { ...cur, open: false } }
+      return { ...prev, [studentId]: { open: true, amount: '', saving: false, saved: false } }
+    })
+  }
+
+  async function saveCash(studentId: string, studentName: string) {
+    const cs = cashState[studentId]
+    const amount = parseInt(cs?.amount ?? '', 10)
+    if (!amount || amount <= 0) return
+    const lessonData = lessons.find(l => l.id === selectedLesson)
+    const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+
+    setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: true } }))
+    const { error } = await supabase.from('transactions').insert({
+      transaction_date: lessonDate,
+      type: 'income',
+      category: 'レッスン収入',
+      amount,
+      description: `現金受取 - ${studentName}（${lessonData?.title ?? 'レッスン'}）`,
+    })
+    if (error) {
+      alert(`保存エラー: ${error.message}`)
+      setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: false } }))
+      return
+    }
+    setCashState(prev => ({ ...prev, [studentId]: { open: false, amount: '', saving: false, saved: true } }))
+    // 3秒後にsaved表示をリセット
+    setTimeout(() => {
+      setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saved: false } }))
+    }, 3000)
+  }
+
   async function markAllPresent() {
     if (!selectedLesson || !confirm(`全員（${students.length}名）を出席にしますか？`)) return
-    const upserts = students.map(s => ({
-      lesson_id: selectedLesson,
-      student_id: s.id,
-      status: 'present' as StatusValue,
-    }))
+    const upserts = students.map(s => ({ lesson_id: selectedLesson, student_id: s.id, status: 'present' as StatusValue }))
     await supabase.from('attendance').upsert(upserts, { onConflict: 'lesson_id,student_id' })
     const { data } = await supabase.from('attendance').select('*').eq('lesson_id', selectedLesson)
     const map: Record<string, Attendance> = {}
@@ -129,7 +157,6 @@ export default function AttendancePage() {
     }
   }, [attendance, students])
 
-  // 月ごとにグループ化（select用、新しい順）
   const groupedLessons = useMemo(() => {
     const groups: Record<string, Lesson[]> = {}
     for (const l of [...lessons].reverse()) {
@@ -161,38 +188,21 @@ export default function AttendancePage() {
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
         <label className="block text-xs font-medium text-gray-600 mb-1.5">レッスンを選択</label>
         <div className="flex items-center gap-2">
-          <button
-            onClick={goPrev}
-            disabled={currentIndex <= 0}
-            className="flex-shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title="前のレッスン"
-          >
+          <button onClick={goPrev} disabled={currentIndex <= 0}
+            className="flex-shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
             <ChevronLeft size={18} />
           </button>
-
-          <select
-            value={selectedLesson}
-            onChange={e => setSelectedLesson(e.target.value)}
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
+          <select value={selectedLesson} onChange={e => setSelectedLesson(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
             <option value="">-- レッスンを選んでください --</option>
             {Object.entries(groupedLessons).map(([month, ls]) => (
               <optgroup key={month} label={`${month.replace('-', '年')}月`}>
-                {ls.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {formatLesson(l)}
-                  </option>
-                ))}
+                {ls.map(l => <option key={l.id} value={l.id}>{formatLesson(l)}</option>)}
               </optgroup>
             ))}
           </select>
-
-          <button
-            onClick={goNext}
-            disabled={currentIndex >= lessons.length - 1}
-            className="flex-shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title="次のレッスン"
-          >
+          <button onClick={goNext} disabled={currentIndex >= lessons.length - 1}
+            className="flex-shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
             <ChevronRight size={18} />
           </button>
         </div>
@@ -203,7 +213,6 @@ export default function AttendancePage() {
 
       {selectedLesson && (
         <>
-          {/* レッスン情報＋集計 */}
           {selectedLessonData && (
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -224,7 +233,6 @@ export default function AttendancePage() {
             </div>
           )}
 
-          {/* 出席テーブル */}
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             {loadingLesson ? (
               <div className="flex items-center justify-center py-12 text-gray-400">
@@ -239,14 +247,16 @@ export default function AttendancePage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">生徒名</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 w-32">生徒名</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">出席状態</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 w-40">現金受取</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {students.map(s => {
                     const a = attendance[s.id]
                     const isSaving = savingId === s.id
+                    const cs = cashState[s.id]
                     return (
                       <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
@@ -262,11 +272,8 @@ export default function AttendancePage() {
                                 const Icon = opt.icon
                                 const isActive = a?.status === opt.value
                                 return (
-                                  <button
-                                    key={opt.value}
-                                    onClick={() => setStatus(s.id, opt.value)}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? opt.active : opt.inactive}`}
-                                  >
+                                  <button key={opt.value} onClick={() => setStatus(s.id, opt.value)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? opt.active : opt.inactive}`}>
                                     <Icon size={12} />
                                     {opt.label}
                                   </button>
@@ -275,6 +282,40 @@ export default function AttendancePage() {
                             )}
                           </div>
                         </td>
+                        <td className="px-4 py-3">
+                          {cs?.open ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-gray-400 text-xs">¥</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={cs.amount}
+                                onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], amount: e.target.value } }))}
+                                onKeyDown={e => { if (e.key === 'Enter') saveCash(s.id, s.name); if (e.key === 'Escape') toggleCash(s.id) }}
+                                placeholder="金額"
+                                className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"
+                                autoFocus
+                              />
+                              <button onClick={() => saveCash(s.id, s.name)} disabled={cs.saving || !cs.amount}
+                                className="text-green-600 hover:text-green-800 p-1 disabled:opacity-40">
+                                {cs.saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                              </button>
+                              <button onClick={() => toggleCash(s.id)} className="text-gray-400 hover:text-gray-600 p-1">
+                                <X size={13} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button onClick={() => toggleCash(s.id)}
+                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${
+                                cs?.saved
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'
+                              }`}>
+                              <JapaneseYen size={12} />
+                              {cs?.saved ? '記録済み' : '現金'}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     )
                   })}
@@ -282,7 +323,6 @@ export default function AttendancePage() {
               </table>
             )}
 
-            {/* フッター集計 */}
             {!loadingLesson && students.length > 0 && (
               <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex flex-wrap gap-3 text-xs">
                 <span className="text-green-600 font-medium">✓ 出席 {counts.present}名</span>
