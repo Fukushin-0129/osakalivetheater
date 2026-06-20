@@ -36,7 +36,7 @@ export default function AttendancePage() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('lessons').select('*').order('scheduled_at', { ascending: true }),
+      supabase.from('lessons').select('*').order('scheduled_at', { ascending: true }).range(0, 4999),
       supabase.from('students').select('*').eq('is_active', true).order('name_kana'),
     ]).then(([{ data: l }, { data: s }]) => {
       const ls = l ?? []
