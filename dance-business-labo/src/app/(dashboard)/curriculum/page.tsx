@@ -20,12 +20,21 @@ export default function CurriculumPage() {
   const [saving, setSaving] = useState(false)
 
   // ドラッグ状態
+  // grabbedId: グリップを掴んでいる行だけ draggable にする（IME干渉防止）
+  const [grabbedId, setGrabbedId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [dragBefore, setDragBefore] = useState(false)
   const dragCounter = useRef(0)
 
   useEffect(() => { load() }, [])
+
+  // mouseup でグリップ掴み状態を解除
+  useEffect(() => {
+    const onMouseUp = () => setGrabbedId(null)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => window.removeEventListener('mouseup', onMouseUp)
+  }, [])
 
   async function load(silent = false) {
     if (!silent) setLoading(true)
@@ -111,20 +120,18 @@ export default function CurriculumPage() {
     setEditingId(null)
   }
 
-  // ── ドラッグ＆ドロップ ──
+  // ── ドラッグ＆ドロップ（グリップを掴んだ時だけ draggable になる） ──
   function onDragStart(e: React.DragEvent, id: string) {
     setDraggedId(id)
     e.dataTransfer.effectAllowed = 'move'
-    // 半透明にする
-    setTimeout(() => {
-      (e.target as HTMLElement).style.opacity = '0.4'
-    }, 0)
+    setTimeout(() => { (e.target as HTMLElement).style.opacity = '0.4' }, 0)
   }
 
   function onDragEnd(e: React.DragEvent) {
     ;(e.target as HTMLElement).style.opacity = '1'
     setDraggedId(null)
     setDragOverId(null)
+    setGrabbedId(null)
     dragCounter.current = 0
   }
 
@@ -144,15 +151,14 @@ export default function CurriculumPage() {
     }
   }
 
-  function onDragEnter() {
-    dragCounter.current++
-  }
+  function onDragEnter() { dragCounter.current++ }
 
   async function onDrop(e: React.DragEvent, targetId: string, siblings: TreeItem[]) {
     e.preventDefault()
     const fromId = draggedId
     setDraggedId(null)
     setDragOverId(null)
+    setGrabbedId(null)
     dragCounter.current = 0
     if (!fromId || fromId === targetId) return
 
@@ -160,14 +166,12 @@ export default function CurriculumPage() {
     const toIdx = siblings.findIndex(s => s.id === targetId)
     if (fromIdx === -1 || toIdx === -1) return
 
-    // 新しい順序を計算
     const reordered = [...siblings]
     const [moved] = reordered.splice(fromIdx, 1)
     let insertAt = dragBefore ? toIdx : toIdx + 1
     if (fromIdx < toIdx) insertAt--
     reordered.splice(insertAt, 0, moved)
 
-    // DB更新（display_orderを一括更新）
     await Promise.all(
       reordered.map((item, idx) =>
         supabase.from('curriculum_items').update({ display_order: idx + 1 }).eq('id', item.id)
@@ -193,9 +197,6 @@ export default function CurriculumPage() {
             if (e.key === 'Enter') saveEdit(id)
             if (e.key === 'Escape') setEditingId(null)
           }}
-          onMouseDown={e => e.stopPropagation()}
-          onDragStart={e => e.preventDefault()}
-          draggable={false}
           className={cls}
           autoFocus
         />
@@ -223,7 +224,7 @@ export default function CurriculumPage() {
             <h1 className="text-2xl font-bold text-gray-800">カリキュラム管理</h1>
             {refreshing && <Loader2 size={16} className="animate-spin text-indigo-400" />}
           </div>
-          <p className="text-gray-500 text-sm mt-0.5">ダブルクリックで編集 / ドラッグで並び替え</p>
+          <p className="text-gray-500 text-sm mt-0.5">ダブルクリックで編集 / グリップをドラッグして並び替え</p>
         </div>
         <button
           onClick={() => startAdd(null, 1)}
@@ -241,9 +242,6 @@ export default function CurriculumPage() {
             value={newName}
             onChange={e => setNewName(e.target.value)}
             onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
-                                  onMouseDown={e => e.stopPropagation()}
-                                  onDragStart={e => e.preventDefault()}
-                                  draggable={false}
             placeholder="大項目名を入力"
             className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             autoFocus
@@ -257,11 +255,12 @@ export default function CurriculumPage() {
 
       <div className="space-y-2">
         {tree.map(root => {
+          const isGrabbed = grabbedId === root.id
           const isOver = dragOverId === root.id
           return (
             <div
               key={root.id}
-              draggable
+              draggable={isGrabbed}
               onDragStart={e => onDragStart(e, root.id)}
               onDragEnd={onDragEnd}
               onDragOver={e => onDragOver(e, root.id)}
@@ -274,7 +273,10 @@ export default function CurriculumPage() {
             >
               {/* 大項目ヘッダー */}
               <div className="flex items-center gap-2 px-3 py-3.5 bg-indigo-50 border-b border-indigo-100">
-                <span className="cursor-grab active:cursor-grabbing text-indigo-300 hover:text-indigo-500 flex-shrink-0 touch-none">
+                <span
+                  className="cursor-grab active:cursor-grabbing text-indigo-300 hover:text-indigo-500 flex-shrink-0 touch-none"
+                  onMouseDown={() => setGrabbedId(root.id)}
+                >
                   <GripVertical size={16} />
                 </span>
                 <button
@@ -305,11 +307,12 @@ export default function CurriculumPage() {
               {expanded.has(root.id) && (
                 <div>
                   {root.children.map(mid => {
+                    const isMidGrabbed = grabbedId === mid.id
                     const isMidOver = dragOverId === mid.id
                     return (
                       <div key={mid.id}>
                         <div
-                          draggable
+                          draggable={isMidGrabbed}
                           onDragStart={e => { e.stopPropagation(); onDragStart(e, mid.id) }}
                           onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
                           onDragOver={e => { e.stopPropagation(); onDragOver(e, mid.id) }}
@@ -320,7 +323,10 @@ export default function CurriculumPage() {
                             isMidOver ? (dragBefore ? 'border-t-2 border-indigo-400' : 'border-b-2 border-indigo-400') : ''
                           } ${draggedId === mid.id ? 'opacity-40' : ''}`}
                         >
-                          <span className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0">
+                          <span
+                            className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0"
+                            onMouseDown={() => setGrabbedId(mid.id)}
+                          >
                             <GripVertical size={14} />
                           </span>
                           <button onClick={() => toggleExpand(mid.id)} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
@@ -348,11 +354,12 @@ export default function CurriculumPage() {
                         {expanded.has(mid.id) && (
                           <div>
                             {(mid.children ?? []).map(small => {
+                              const isSmallGrabbed = grabbedId === small.id
                               const isSmallOver = dragOverId === small.id
                               return (
                                 <div
                                   key={small.id}
-                                  draggable
+                                  draggable={isSmallGrabbed}
                                   onDragStart={e => { e.stopPropagation(); onDragStart(e, small.id) }}
                                   onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
                                   onDragOver={e => { e.stopPropagation(); onDragOver(e, small.id) }}
@@ -363,7 +370,10 @@ export default function CurriculumPage() {
                                     isSmallOver ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''
                                   } ${draggedId === small.id ? 'opacity-40' : ''}`}
                                 >
-                                  <span className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0">
+                                  <span
+                                    className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0"
+                                    onMouseDown={() => setGrabbedId(small.id)}
+                                  >
                                     <GripVertical size={13} />
                                   </span>
                                   {editingId === small.id ? (
@@ -391,9 +401,6 @@ export default function CurriculumPage() {
                                   value={newName}
                                   onChange={e => setNewName(e.target.value)}
                                   onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
-                                  onMouseDown={e => e.stopPropagation()}
-                                  onDragStart={e => e.preventDefault()}
-                                  draggable={false}
                                   placeholder="小項目名を入力"
                                   className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                   autoFocus
@@ -422,9 +429,6 @@ export default function CurriculumPage() {
                         value={newName}
                         onChange={e => setNewName(e.target.value)}
                         onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
-                                  onMouseDown={e => e.stopPropagation()}
-                                  onDragStart={e => e.preventDefault()}
-                                  draggable={false}
                         placeholder="中項目名を入力"
                         className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         autoFocus
