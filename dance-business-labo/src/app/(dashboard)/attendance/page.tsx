@@ -35,8 +35,17 @@ export default function AttendancePage() {
   const supabase = createClient()
 
   useEffect(() => {
+    // 過去1年〜2年先の範囲に絞ることでサーバー側の行数上限を回避
+    const from = new Date()
+    from.setFullYear(from.getFullYear() - 1)
+    const to = new Date()
+    to.setFullYear(to.getFullYear() + 2)
+
     Promise.all([
-      supabase.from('lessons').select('*').order('scheduled_at', { ascending: true }).range(0, 4999),
+      supabase.from('lessons').select('*')
+        .gte('scheduled_at', from.toISOString())
+        .lte('scheduled_at', to.toISOString())
+        .order('scheduled_at', { ascending: true }),
       supabase.from('students').select('*').eq('is_active', true).order('name_kana'),
     ]).then(([{ data: l }, { data: s }]) => {
       const ls = l ?? []
@@ -46,9 +55,7 @@ export default function AttendancePage() {
       // 今日に最も近いレッスンをデフォルト選択
       if (ls.length > 0) {
         const now = new Date()
-        // 今日以降で最も近い未来のレッスン
         const upcoming = ls.find(lesson => parseJST(lesson.scheduled_at) >= now)
-        // なければ最も最近の過去レッスン
         const nearest = upcoming ?? ls[ls.length - 1]
         setSelectedLesson(nearest.id)
       }
