@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, Student, Attendance } from '@/types/database'
-import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2 } from 'lucide-react'
+import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const STATUS_OPTIONS = [
   { value: 'present',   label: '出席',       icon: UserCheck, active: 'bg-green-500 text-white',  inactive: 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600' },
@@ -13,6 +13,17 @@ const STATUS_OPTIONS = [
 ] as const
 
 type StatusValue = typeof STATUS_OPTIONS[number]['value']
+
+function parseJST(s: string): Date {
+  const clean = s.slice(0, 16).replace(' ', 'T')
+  const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
+  const [h, min] = clean.slice(11).split(':').map(Number)
+  return new Date(y, m - 1, d, h, min)
+}
+
+function formatLesson(l: Lesson) {
+  return parseJST(l.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }) + ' ' + l.title
+}
 
 export default function AttendancePage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
@@ -25,11 +36,22 @@ export default function AttendancePage() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('lessons').select('*').order('scheduled_at', { ascending: false }).limit(50),
+      supabase.from('lessons').select('*').order('scheduled_at', { ascending: true }).limit(200),
       supabase.from('students').select('*').eq('is_active', true).order('name_kana'),
     ]).then(([{ data: l }, { data: s }]) => {
-      setLessons(l ?? [])
+      const ls = l ?? []
+      setLessons(ls)
       setStudents(s ?? [])
+
+      // 今日に最も近いレッスンをデフォルト選択
+      if (ls.length > 0) {
+        const now = new Date()
+        // 今日以降で最も近い未来のレッスン
+        const upcoming = ls.find(lesson => parseJST(lesson.scheduled_at) >= now)
+        // なければ最も最近の過去レッスン
+        const nearest = upcoming ?? ls[ls.length - 1]
+        setSelectedLesson(nearest.id)
+      }
     })
   }, [])
 
@@ -44,13 +66,22 @@ export default function AttendancePage() {
     })
   }, [selectedLesson])
 
+  // lessons は昇順（古い→新しい）
+  const currentIndex = useMemo(() => lessons.findIndex(l => l.id === selectedLesson), [lessons, selectedLesson])
+
+  function goPrev() {
+    if (currentIndex > 0) setSelectedLesson(lessons[currentIndex - 1].id)
+  }
+  function goNext() {
+    if (currentIndex < lessons.length - 1) setSelectedLesson(lessons[currentIndex + 1].id)
+  }
+
   async function setStatus(studentId: string, status: StatusValue) {
     if (!selectedLesson) return
     setSavingId(studentId)
     const existing = attendance[studentId]
     if (existing) {
       if (existing.status === status) {
-        // 同じボタンを押したら削除（トグル）
         await supabase.from('attendance').delete().eq('id', existing.id)
         setAttendance(prev => { const n = { ...prev }; delete n[studentId]; return n })
       } else {
@@ -91,11 +122,11 @@ export default function AttendancePage() {
     }
   }, [attendance, students])
 
-  // 月ごとにレッスンをグループ化
+  // 月ごとにグループ化（select用、新しい順）
   const groupedLessons = useMemo(() => {
     const groups: Record<string, Lesson[]> = {}
-    for (const l of lessons) {
-      const key = l.scheduled_at.slice(0, 7) // YYYY-MM
+    for (const l of [...lessons].reverse()) {
+      const key = l.scheduled_at.slice(0, 7)
       if (!groups[key]) groups[key] = []
       groups[key].push(l)
     }
@@ -119,25 +150,48 @@ export default function AttendancePage() {
         )}
       </div>
 
-      {/* レッスン選択 */}
+      {/* レッスン選択 + 前後ナビ */}
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
         <label className="block text-xs font-medium text-gray-600 mb-1.5">レッスンを選択</label>
-        <select
-          value={selectedLesson}
-          onChange={e => setSelectedLesson(e.target.value)}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="">-- レッスンを選んでください --</option>
-          {Object.entries(groupedLessons).map(([month, ls]) => (
-            <optgroup key={month} label={`${month.replace('-', '年')}月`}>
-              {ls.map(l => (
-                <option key={l.id} value={l.id}>
-                  {new Date(l.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })} {l.title}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={goPrev}
+            disabled={currentIndex <= 0}
+            className="flex-shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            title="前のレッスン"
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          <select
+            value={selectedLesson}
+            onChange={e => setSelectedLesson(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">-- レッスンを選んでください --</option>
+            {Object.entries(groupedLessons).map(([month, ls]) => (
+              <optgroup key={month} label={`${month.replace('-', '年')}月`}>
+                {ls.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {formatLesson(l)}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+
+          <button
+            onClick={goNext}
+            disabled={currentIndex >= lessons.length - 1}
+            className="flex-shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            title="次のレッスン"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        {lessons.length > 0 && currentIndex >= 0 && (
+          <p className="text-xs text-gray-400 mt-1.5 text-right">{currentIndex + 1} / {lessons.length} 件</p>
+        )}
       </div>
 
       {selectedLesson && (
@@ -149,7 +203,7 @@ export default function AttendancePage() {
                 <div>
                   <div className="font-semibold text-indigo-800">{selectedLessonData.title}</div>
                   <div className="text-indigo-600 text-sm mt-0.5">
-                    {new Date(selectedLessonData.scheduled_at).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {parseJST(selectedLessonData.scheduled_at).toLocaleString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })}
                     {selectedLessonData.location && <span className="ml-2">📍{selectedLessonData.location}</span>}
                   </div>
                 </div>
