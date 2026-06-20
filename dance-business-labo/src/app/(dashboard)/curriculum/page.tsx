@@ -189,6 +189,7 @@ export default function CurriculumPage() {
           value={editName}
           onChange={e => setEditName(e.target.value)}
           onKeyDown={e => {
+            if (e.nativeEvent.isComposing) return
             if (e.key === 'Enter') saveEdit(id)
             if (e.key === 'Escape') setEditingId(null)
           }}
@@ -236,7 +237,7 @@ export default function CurriculumPage() {
           <input
             value={newName}
             onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addItem()}
+            onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
             placeholder="大項目名を入力"
             className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             autoFocus
@@ -383,7 +384,7 @@ export default function CurriculumPage() {
                                 <input
                                   value={newName}
                                   onChange={e => setNewName(e.target.value)}
-                                  onKeyDown={e => e.key === 'Enter' && addItem()}
+                                  onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
                                   placeholder="小項目名を入力"
                                   className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                   autoFocus
@@ -411,7 +412,7 @@ export default function CurriculumPage() {
                       <input
                         value={newName}
                         onChange={e => setNewName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && addItem()}
+                        onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
                         placeholder="中項目名を入力"
                         className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         autoFocus
