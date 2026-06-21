@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Transaction, Student } from '@/types/database'
-import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, X, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, X, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 
 const INCOME_CATEGORIES = ['レッスン収入', '体験レッスン収入', 'チケット販売', 'グッズ', 'その他収入']
 const EXPENSE_CATEGORIES = ['レッスン場代', '体験レッスン代', '会場費', '交通費', '衣装・道具', '広告費', '通信費', 'その他経費']
@@ -148,6 +148,14 @@ export default function FinancePage() {
     lesson_date: '',
   })
   const [lessonForm, setLessonForm] = useState(initLessonForm())
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const [editForm, setEditForm] = useState({
+    transaction_date: '',
+    type: 'income',
+    category: '',
+    amount: '',
+    description: '',
+  })
   const supabase = createClient()
 
   async function loadAllYears() {
@@ -215,6 +223,33 @@ export default function FinancePage() {
     setShowLessonModal(false)
     setLessonForm(initLessonForm())
     load()
+  }
+
+  function openEdit(t: Transaction) {
+    setEditingTransaction(t)
+    setEditForm({
+      transaction_date: t.transaction_date,
+      type: t.type,
+      category: t.category,
+      amount: String(t.amount),
+      description: t.description ?? '',
+    })
+  }
+
+  async function handleUpdate() {
+    if (!editingTransaction || !editForm.amount || Number(editForm.amount) <= 0) return
+    setSaving(true)
+    await supabase.from('transactions').update({
+      transaction_date: editForm.transaction_date,
+      type: editForm.type,
+      category: editForm.category,
+      amount: Number(editForm.amount),
+      description: editForm.description || null,
+    }).eq('id', editingTransaction.id)
+    setSaving(false)
+    setEditingTransaction(null)
+    load()
+    loadAllYears()
   }
 
   async function handleDelete(id: string) {
@@ -558,9 +593,14 @@ export default function FinancePage() {
                             })()}
                           </td>
                           <td className="px-3 py-2.5 text-right">
-                            <button onClick={() => handleDelete(t.id)} className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => openEdit(t)} className="text-gray-300 hover:text-indigo-500 p-1 rounded hover:bg-indigo-50 transition-colors">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => handleDelete(t.id)} className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -687,6 +727,63 @@ export default function FinancePage() {
               >
                 {saving && <Loader2 size={14} className="animate-spin" />}
                 {saving ? '保存中...' : `${lessonForm.lesson_dates.size > 0 ? `${lessonForm.lesson_dates.size}件 ` : ''}追加する`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 明細編集モーダル */}
+      {editingTransaction && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-800">明細を編集</h2>
+              <button onClick={() => setEditingTransaction(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <div>
+                <label className="text-xs font-medium text-gray-600">日付</label>
+                <input type="date" value={editForm.transaction_date} onChange={e => setEditForm(f => ({ ...f, transaction_date: e.target.value }))} className={`mt-1 ${inputCls}`} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">種別</label>
+                <div className="flex gap-2 mt-1">
+                  {[{ v: 'income', l: '収入' }, { v: 'expense', l: '支出' }].map(opt => (
+                    <button
+                      key={opt.v}
+                      onClick={() => setEditForm(f => ({ ...f, type: opt.v, category: opt.v === 'income' ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0] }))}
+                      className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${editForm.type === opt.v ? (opt.v === 'income' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">カテゴリ</label>
+                <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))} className={`mt-1 ${inputCls}`}>
+                  {(editForm.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">金額（円）</label>
+                <input type="number" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} className={`mt-1 ${inputCls}`} placeholder="0" min="1" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">内容・メモ</label>
+                <input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className={`mt-1 ${inputCls}`} />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setEditingTransaction(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
+              <button
+                onClick={handleUpdate}
+                disabled={saving || !editForm.amount || Number(editForm.amount) <= 0}
+                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white py-2.5 rounded-xl text-sm font-medium"
+              >
+                {saving && <Loader2 size={14} className="animate-spin" />}
+                {saving ? '保存中...' : '更新する'}
               </button>
             </div>
           </div>
