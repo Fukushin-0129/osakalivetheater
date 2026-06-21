@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType } from '@/types/database'
-import { Plus, Pencil, Trash2, Calendar, List, ChevronLeft, ChevronRight, Clock, MapPin, Users, X, Loader2, Download, BookOpen } from 'lucide-react'
+import { Plus, Pencil, Trash2, Calendar, List, ChevronLeft, ChevronRight, Clock, MapPin, Users, X, Loader2, Download, BookOpen, ArrowLeftRight } from 'lucide-react'
 import Link from 'next/link'
 
 type ViewMode = 'list' | 'calendar'
@@ -11,6 +11,7 @@ type AttendanceWithStudent = { count: number; students: { name: string; name_kan
 type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[] }
 type AttendeeInfo = { id: string; student_id: string; status: string; students: { name: string; name_kana: string | null } | null }
 type AttendeeModal = { lessonId: string; lessonTitle: string; lessonDate: string } | null
+type SubRecord = { id: string; original_lesson_id: string; substitute_lesson_id: string | null; reason: string | null; price_difference: number; notes: string | null }
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
 const DEFAULT_LOCATION = '山田ふれあい文化センター練習室'
@@ -49,6 +50,12 @@ export default function LessonsPage() {
   const [importTitle, setImportTitle] = useState('タップダンスレッスン')
   const [loadingImport, setLoadingImport] = useState(false)
   const [editing, setEditing] = useState<Lesson | null>(null)
+  // 振替
+  const [substitutions, setSubstitutions] = useState<SubRecord[]>([])
+  const [subModal, setSubModal] = useState<LessonWithCount | null>(null)
+  const [subForm, setSubForm] = useState({ substitute_lesson_id: '', reason: '先生の都合', price_difference: '0', notes: '' })
+  const [subSaving, setSubSaving] = useState(false)
+
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [yearRange, setYearRange] = useState<number[]>([])
@@ -86,6 +93,9 @@ export default function LessonsPage() {
     ])
     setLessons((l ?? []) as LessonWithCount[])
     setLessonTypes(lt ?? [])
+    // 振替データも読み込む
+    const { data: subs } = await supabase.from('lesson_substitutions').select('*')
+    setSubstitutions(subs ?? [])
     setLoading(false)
   }
 
@@ -193,6 +203,63 @@ export default function LessonsPage() {
     const sorted = [...(l.attendance ?? [])].sort((a, b) => a.status.localeCompare(b.status))
     setAttendees(sorted.map((a, i) => ({ id: String(i), student_id: '', status: a.status, students: a.students })))
     setLoadingAttendees(false)
+  }
+
+  function openSubModal(l: LessonWithCount) {
+    const existing = substitutions.find(s => s.original_lesson_id === l.id)
+    setSubForm({
+      substitute_lesson_id: existing?.substitute_lesson_id ?? '',
+      reason: existing?.reason ?? '先生の都合',
+      price_difference: String(existing?.price_difference ?? 0),
+      notes: existing?.notes ?? '',
+    })
+    setSubModal(l)
+  }
+
+  async function handleSubSave() {
+    if (!subModal || !subForm.substitute_lesson_id) return
+    setSubSaving(true)
+    const priceDiff = parseInt(subForm.price_difference) || 0
+    const originalLesson = subModal
+    const subLesson = lessons.find(l => l.id === subForm.substitute_lesson_id)
+
+    // 既存の振替を削除してから再挿入
+    const existing = substitutions.find(s => s.original_lesson_id === subModal.id)
+    if (existing) {
+      await supabase.from('lesson_substitutions').delete().eq('id', existing.id)
+    }
+    await supabase.from('lesson_substitutions').insert({
+      original_lesson_id: subModal.id,
+      substitute_lesson_id: subForm.substitute_lesson_id,
+      reason: subForm.reason || null,
+      price_difference: priceDiff,
+      notes: subForm.notes || null,
+    })
+
+    // 差額を収支に計上
+    if (priceDiff !== 0) {
+      const subDate = subLesson ? subLesson.scheduled_at.slice(0, 10) : originalLesson.scheduled_at.slice(0, 10)
+      const origDate = parseJST(originalLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
+      const subDateLabel = subLesson ? parseJST(subLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : ''
+      await supabase.from('transactions').insert({
+        transaction_date: subDate,
+        type: priceDiff > 0 ? 'income' : 'expense',
+        category: '振替差額',
+        amount: Math.abs(priceDiff),
+        description: `振替差額（${origDate} → ${subDateLabel}）${subForm.reason ? ' ' + subForm.reason : ''}`,
+      })
+    }
+
+    setSubSaving(false)
+    setSubModal(null)
+    load()
+  }
+
+  async function handleSubDelete(lessonId: string) {
+    if (!confirm('振替設定を解除しますか？')) return
+    const existing = substitutions.find(s => s.original_lesson_id === lessonId)
+    if (existing) await supabase.from('lesson_substitutions').delete().eq('id', existing.id)
+    load()
   }
 
   async function handleDelete(l: Lesson) {
@@ -405,7 +472,30 @@ export default function LessonsPage() {
                               </div>
                             </td>
                             <td className="px-4 py-3 text-right whitespace-nowrap">
-                              <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 mr-2 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors font-medium"><BookOpen size={13} /> 計画・評価</Link>
+                              {(() => {
+                                const sub = substitutions.find(s => s.original_lesson_id === l.id)
+                                const subLesson = sub ? lessons.find(ll => ll.id === sub.substitute_lesson_id) : null
+                                const isSub = substitutions.some(s => s.substitute_lesson_id === l.id)
+                                const origLesson = isSub ? lessons.find(ll => substitutions.find(s => s.substitute_lesson_id === l.id && s.original_lesson_id === ll.id)) : null
+                                return (
+                                  <>
+                                    {sub && subLesson && (
+                                      <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full mr-2">
+                                        <ArrowLeftRight size={10} />
+                                        {parseJST(subLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}へ振替
+                                      </span>
+                                    )}
+                                    {isSub && origLesson && (
+                                      <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full mr-2">
+                                        <ArrowLeftRight size={10} />
+                                        {parseJST(origLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}の振替
+                                      </span>
+                                    )}
+                                  </>
+                                )
+                              })()}
+                              <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 mr-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors font-medium"><BookOpen size={13} /> 計画・評価</Link>
+                              <button onClick={() => openSubModal(l)} className="text-gray-400 hover:text-orange-500 mr-1 p-1.5 rounded hover:bg-orange-50 transition-colors" title="振替設定"><ArrowLeftRight size={14} /></button>
                               <button onClick={() => openEdit(l)} className="text-gray-400 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors"><Pencil size={14} /></button>
                               <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                             </td>
@@ -472,7 +562,30 @@ export default function LessonsPage() {
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                                  <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 mr-2 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"><BookOpen size={13} /> 計画・評価</Link>
+                                  {(() => {
+                                    const sub = substitutions.find(s => s.original_lesson_id === l.id)
+                                    const subLesson = sub ? lessons.find(ll => ll.id === sub.substitute_lesson_id) : null
+                                    const isSub = substitutions.some(s => s.substitute_lesson_id === l.id)
+                                    const origLesson = isSub ? lessons.find(ll => substitutions.find(s => s.substitute_lesson_id === l.id && s.original_lesson_id === ll.id)) : null
+                                    return (
+                                      <>
+                                        {sub && subLesson && (
+                                          <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full mr-2">
+                                            <ArrowLeftRight size={10} />
+                                            {parseJST(subLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}へ振替
+                                          </span>
+                                        )}
+                                        {isSub && origLesson && (
+                                          <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full mr-2">
+                                            <ArrowLeftRight size={10} />
+                                            {parseJST(origLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}の振替
+                                          </span>
+                                        )}
+                                      </>
+                                    )
+                                  })()}
+                                  <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 mr-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"><BookOpen size={13} /> 計画・評価</Link>
+                                  <button onClick={() => openSubModal(l)} className="text-gray-300 hover:text-orange-500 mr-1 p-1.5 rounded hover:bg-orange-50 transition-colors" title="振替設定"><ArrowLeftRight size={14} /></button>
                                   <button onClick={() => openEdit(l)} className="text-gray-300 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors"><Pencil size={14} /></button>
                                   <button onClick={() => handleDelete(l)} className="text-gray-300 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
                                 </td>
@@ -614,6 +727,101 @@ export default function LessonsPage() {
             </div>
             <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500 flex-shrink-0">
               {!loadingAttendees && `${attendees.filter(a => a.status === 'present').length}名出席 / ${attendees.filter(a => a.status === 'late').length}名遅刻 / ${attendees.filter(a => a.status === 'absent').length}名欠席`}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">レッスン振替設定</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  振替元: {parseJST(subModal.scheduled_at).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+              <button onClick={() => setSubModal(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">振替先レッスン *</label>
+                <select
+                  value={subForm.substitute_lesson_id}
+                  onChange={e => setSubForm(f => ({ ...f, substitute_lesson_id: e.target.value }))}
+                  className={inputCls}
+                >
+                  <option value="">振替先を選択してください</option>
+                  {[...lessons]
+                    .filter(l => l.id !== subModal.id)
+                    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+                    .map(l => (
+                      <option key={l.id} value={l.id}>
+                        {parseJST(l.scheduled_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })} {l.title}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">振替理由</label>
+                <input
+                  value={subForm.reason}
+                  onChange={e => setSubForm(f => ({ ...f, reason: e.target.value }))}
+                  placeholder="例: 先生の都合、会場都合"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">差額（円）</label>
+                <p className="text-xs text-gray-400 mb-1">振替先の方が高い場合は正の値、安い場合は負の値を入力。0なら収支に影響なし。</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 text-sm">¥</span>
+                  <input
+                    type="number"
+                    value={subForm.price_difference}
+                    onChange={e => setSubForm(f => ({ ...f, price_difference: e.target.value }))}
+                    placeholder="0"
+                    className={inputCls}
+                  />
+                </div>
+                {parseInt(subForm.price_difference) !== 0 && (
+                  <p className={`text-xs mt-1 font-medium ${parseInt(subForm.price_difference) > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {parseInt(subForm.price_difference) > 0
+                      ? `→ 収入として ¥${Math.abs(parseInt(subForm.price_difference)).toLocaleString()} を収支に計上`
+                      : `→ 支出として ¥${Math.abs(parseInt(subForm.price_difference)).toLocaleString()} を収支に計上`}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">メモ</label>
+                <textarea
+                  value={subForm.notes}
+                  onChange={e => setSubForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  className={inputCls}
+                  placeholder="備考など"
+                />
+              </div>
+              {substitutions.find(s => s.original_lesson_id === subModal.id) && (
+                <button
+                  onClick={() => { handleSubDelete(subModal.id); setSubModal(null) }}
+                  className="text-xs text-red-400 hover:text-red-600 underline"
+                >
+                  この振替設定を解除する
+                </button>
+              )}
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+              <button onClick={() => setSubModal(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
+              <button
+                onClick={handleSubSave}
+                disabled={subSaving || !subForm.substitute_lesson_id}
+                className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white py-2.5 rounded-xl text-sm font-medium"
+              >
+                {subSaving && <Loader2 size={14} className="animate-spin" />}
+                {subSaving ? '保存中...' : '振替を設定'}
+              </button>
             </div>
           </div>
         </div>
