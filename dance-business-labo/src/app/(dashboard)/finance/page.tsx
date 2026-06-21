@@ -132,6 +132,7 @@ type YearlyTotal = { year: number; income: number; expense: number }
 export default function FinancePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [studentMap, setStudentMap] = useState<Map<number, string>>(new Map())
+  const [allStudents, setAllStudents] = useState<Pick<Student, 'id' | 'name'>[]>([])
   const [allYearlyTotals, setAllYearlyTotals] = useState<YearlyTotal[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -170,7 +171,7 @@ export default function FinancePage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: txData }, { data: stuData }] = await Promise.all([
+    const [{ data: txData }, { data: stuData }, { data: allStuData }] = await Promise.all([
       supabase
         .from('transactions')
         .select('*')
@@ -181,6 +182,11 @@ export default function FinancePage() {
         .from('students')
         .select('legacy_id, name')
         .not('legacy_id', 'is', null),
+      supabase
+        .from('students')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name_kana'),
     ])
     setTransactions(txData ?? [])
     const map = new Map<number, string>()
@@ -188,6 +194,7 @@ export default function FinancePage() {
       if (s.legacy_id != null) map.set(s.legacy_id, s.name)
     }
     setStudentMap(map)
+    setAllStudents((allStuData ?? []) as Pick<Student, 'id' | 'name'>[])
     setLoading(false)
   }
 
@@ -770,10 +777,24 @@ export default function FinancePage() {
                 <label className="text-xs font-medium text-gray-600">金額（円）</label>
                 <input type="number" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))} className={`mt-1 ${inputCls}`} placeholder="0" min="1" />
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">内容・メモ</label>
-                <input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className={`mt-1 ${inputCls}`} />
-              </div>
+              {(editForm.category === '入会金' || editForm.category === '体験レッスン収入') ? (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">生徒</label>
+                  <select
+                    value={editForm.description}
+                    onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                    className={`mt-1 ${inputCls}`}
+                  >
+                    <option value="">-- 選択してください --</option>
+                    {allStudents.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">内容・メモ</label>
+                  <input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} className={`mt-1 ${inputCls}`} />
+                </div>
+              )}
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => setEditingTransaction(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
@@ -833,10 +854,25 @@ export default function FinancePage() {
                   <input type="date" value={form.lesson_date} onChange={e => setForm(f => ({ ...f, lesson_date: e.target.value }))} className={`mt-1 ${inputCls}`} />
                 </div>
               )}
-              <div>
-                <label className="text-xs font-medium text-gray-600">内容・メモ</label>
-                <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={`mt-1 ${inputCls}`} placeholder={form.category === 'レッスン場代' ? DEFAULT_VENUE : ''} />
-              </div>
+              {(form.category === '入会金' || form.category === '体験レッスン収入') && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">生徒</label>
+                  <select
+                    value={form.description}
+                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                    className={`mt-1 ${inputCls}`}
+                  >
+                    <option value="">-- 選択してください --</option>
+                    {allStudents.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {form.category !== '入会金' && form.category !== '体験レッスン収入' && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">内容・メモ</label>
+                  <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className={`mt-1 ${inputCls}`} placeholder={form.category === 'レッスン場代' ? DEFAULT_VENUE : ''} />
+                </div>
+              )}
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
