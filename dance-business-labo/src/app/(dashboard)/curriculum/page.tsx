@@ -2,10 +2,199 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { CurriculumItem } from '@/types/database'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, Loader2, GripVertical, BookOpen } from 'lucide-react'
+import type { CurriculumItem, MediaItem } from '@/types/database'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, Loader2, GripVertical, BookOpen, Image, Video, Link, FileText, ExternalLink } from 'lucide-react'
 
 type TreeItem = CurriculumItem & { children: TreeItem[] }
+
+function isYouTube(url: string) {
+  return /youtube\.com|youtu\.be/.test(url)
+}
+
+function getYouTubeId(url: string) {
+  const m = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)
+  return m ? m[1] : null
+}
+
+function isImage(url: string) {
+  return /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url)
+}
+
+function isVideo(url: string) {
+  return /\.(mp4|webm|ogg)(\?|$)/i.test(url)
+}
+
+function detectType(url: string): MediaItem['type'] {
+  if (isYouTube(url) || isVideo(url)) return 'video'
+  if (isImage(url)) return 'image'
+  return 'link'
+}
+
+// ── メディア表示コンポーネント ──
+function MediaPreview({ item }: { item: MediaItem }) {
+  if (item.type === 'video' && isYouTube(item.url)) {
+    const vid = getYouTubeId(item.url)
+    return (
+      <div className="rounded-lg overflow-hidden bg-black aspect-video">
+        <iframe
+          src={`https://www.youtube.com/embed/${vid}`}
+          className="w-full h-full"
+          allowFullScreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        />
+      </div>
+    )
+  }
+  if (item.type === 'video') {
+    return (
+      <div className="rounded-lg overflow-hidden bg-black aspect-video">
+        <video src={item.url} controls className="w-full h-full" />
+      </div>
+    )
+  }
+  if (item.type === 'image') {
+    return (
+      <a href={item.url} target="_blank" rel="noopener noreferrer">
+        <img src={item.url} alt={item.label ?? ''} className="rounded-lg max-h-64 object-contain bg-gray-100 w-full" />
+      </a>
+    )
+  }
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 text-sm underline"
+    >
+      <ExternalLink size={14} />
+      {item.label || item.url}
+    </a>
+  )
+}
+
+// ── 小項目の詳細パネル ──
+function SmallItemDetail({ item, onSaved }: { item: TreeItem; onSaved: () => void }) {
+  const supabase = createClient()
+  const [description, setDescription] = useState(item.description ?? '')
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>(item.media_items ?? [])
+  const [newUrl, setNewUrl] = useState('')
+  const [newLabel, setNewLabel] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  function addMedia() {
+    const url = newUrl.trim()
+    if (!url) return
+    const type = detectType(url)
+    const next = [...mediaItems, { type, url, label: newLabel.trim() || undefined }]
+    setMediaItems(next)
+    setNewUrl('')
+    setNewLabel('')
+    setDirty(true)
+  }
+
+  function removeMedia(idx: number) {
+    const next = mediaItems.filter((_, i) => i !== idx)
+    setMediaItems(next)
+    setDirty(true)
+  }
+
+  async function save() {
+    setSaving(true)
+    const { error } = await supabase
+      .from('curriculum_items')
+      .update({ description: description || null, media_items: mediaItems })
+      .eq('id', item.id)
+    setSaving(false)
+    if (error) { alert(`保存エラー: ${error.message}`); return }
+    setDirty(false)
+    onSaved()
+  }
+
+  return (
+    <div className="pl-14 pr-4 pb-4 pt-2 bg-indigo-50/30 border-b border-gray-100 space-y-3">
+      {/* 説明文 */}
+      <div>
+        <label className="text-xs font-medium text-gray-500 flex items-center gap-1 mb-1">
+          <FileText size={11} /> レッスン内容の説明
+        </label>
+        <textarea
+          value={description}
+          onChange={e => { setDescription(e.target.value); setDirty(true) }}
+          placeholder="このレッスン内容について説明を入力..."
+          rows={3}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+        />
+      </div>
+
+      {/* メディア一覧 */}
+      {mediaItems.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-gray-500">追加済みメディア・リンク</p>
+          {mediaItems.map((m, idx) => (
+            <div key={idx} className="flex gap-2 items-start">
+              <div className="flex-1">
+                <MediaPreview item={m} />
+                {m.label && m.type !== 'link' && (
+                  <p className="text-xs text-gray-500 mt-0.5">{m.label}</p>
+                )}
+              </div>
+              <button
+                onClick={() => removeMedia(idx)}
+                className="flex-shrink-0 text-gray-300 hover:text-red-500 p-1 mt-0.5"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* メディア追加フォーム */}
+      <div className="border border-dashed border-gray-300 rounded-lg p-3 space-y-2">
+        <p className="text-xs font-medium text-gray-500 flex items-center gap-1">
+          <Image size={11} /><Video size={11} /><Link size={11} /> 動画・画像・リンクを追加
+        </p>
+        <input
+          value={newUrl}
+          onChange={e => setNewUrl(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) addMedia() }}
+          placeholder="URL（YouTube・画像・リンクなど）"
+          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        />
+        <div className="flex gap-2">
+          <input
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            placeholder="ラベル（省略可）"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <button
+            onClick={addMedia}
+            disabled={!newUrl.trim()}
+            className="flex items-center gap-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
+          >
+            <Plus size={11} /> 追加
+          </button>
+        </div>
+      </div>
+
+      {/* 保存ボタン */}
+      {dirty && (
+        <div className="flex justify-end">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+          >
+            {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+            保存
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CurriculumPage() {
   const supabase = createClient()
@@ -13,14 +202,13 @@ export default function CurriculumPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [detailOpen, setDetailOpen] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [addingTo, setAddingTo] = useState<{ parentId: string | null; level: number } | null>(null)
   const [newName, setNewName] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // ドラッグ状態
-  // grabbedId: グリップを掴んでいる行だけ draggable にする（IME干渉防止）
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -29,7 +217,6 @@ export default function CurriculumPage() {
 
   useEffect(() => { load() }, [])
 
-  // mouseup でグリップ掴み状態を解除
   useEffect(() => {
     const onMouseUp = () => setGrabbedId(null)
     window.addEventListener('mouseup', onMouseUp)
@@ -50,7 +237,10 @@ export default function CurriculumPage() {
       setRefreshing(false)
       return
     }
-    const flat: CurriculumItem[] = data ?? []
+    const flat: CurriculumItem[] = (data ?? []).map(d => ({
+      ...d,
+      media_items: d.media_items ?? [],
+    }))
     const roots: TreeItem[] = flat.filter(i => i.parent_id === null).map(i => ({ ...i, children: [] }))
     for (const root of roots) {
       root.children = flat
@@ -67,6 +257,14 @@ export default function CurriculumPage() {
 
   function toggleExpand(id: string) {
     setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleDetail(id: string) {
+    setDetailOpen(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
@@ -120,7 +318,6 @@ export default function CurriculumPage() {
     setEditingId(null)
   }
 
-  // ── ドラッグ＆ドロップ（グリップを掴んだ時だけ draggable になる） ──
   function onDragStart(e: React.DragEvent, id: string) {
     setDraggedId(id)
     e.dataTransfer.effectAllowed = 'move'
@@ -180,7 +377,6 @@ export default function CurriculumPage() {
     load(true)
   }
 
-  // ── 共通の編集インライン ──
   function EditInput({ id, size = 'md' }: { id: string; size?: 'sm' | 'md' | 'lg' }) {
     const cls = size === 'lg'
       ? 'flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500'
@@ -356,6 +552,8 @@ export default function CurriculumPage() {
                             {(mid.children ?? []).map(small => {
                               const isSmallGrabbed = grabbedId === small.id
                               const isSmallOver = dragOverId === small.id
+                              const hasDetail = !!(small.description || (small.media_items ?? []).length > 0)
+                              const isDetailOpen = detailOpen.has(small.id)
                               return (
                                 <div
                                   key={small.id}
@@ -366,30 +564,54 @@ export default function CurriculumPage() {
                                   onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
                                   onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
                                   onDrop={e => { e.stopPropagation(); onDrop(e, small.id, (mid.children ?? []) as TreeItem[]) }}
-                                  className={`flex items-center gap-2 pl-14 pr-4 py-2 border-b border-gray-50 hover:bg-gray-50 transition-all ${
+                                  className={`border-b border-gray-50 transition-all ${
                                     isSmallOver ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''
                                   } ${draggedId === small.id ? 'opacity-40' : ''}`}
                                 >
-                                  <span
-                                    className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0"
-                                    onMouseDown={() => setGrabbedId(small.id)}
-                                  >
-                                    <GripVertical size={13} />
-                                  </span>
-                                  {editingId === small.id ? (
-                                    <EditInput id={small.id} size="sm" />
-                                  ) : (
-                                    <>
-                                      <span
-                                        className="flex-1 text-sm text-gray-600 cursor-pointer select-none"
-                                        onDoubleClick={() => startEdit(small)}
-                                        title="ダブルクリックで編集"
-                                      >
-                                        {small.name}
-                                      </span>
-                                      <button onClick={() => startEdit(small)} className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"><Pencil size={11} /></button>
-                                      <button onClick={() => deleteItem(small.id)} className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={11} /></button>
-                                    </>
+                                  <div className="flex items-center gap-2 pl-14 pr-4 py-2 hover:bg-gray-50">
+                                    <span
+                                      className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0"
+                                      onMouseDown={() => setGrabbedId(small.id)}
+                                    >
+                                      <GripVertical size={13} />
+                                    </span>
+                                    {editingId === small.id ? (
+                                      <EditInput id={small.id} size="sm" />
+                                    ) : (
+                                      <>
+                                        <span
+                                          className="flex-1 text-sm text-gray-600 cursor-pointer select-none"
+                                          onDoubleClick={() => startEdit(small)}
+                                          title="ダブルクリックで編集"
+                                        >
+                                          {small.name}
+                                        </span>
+                                        {/* 詳細トグルボタン */}
+                                        <button
+                                          onClick={() => toggleDetail(small.id)}
+                                          className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+                                            isDetailOpen
+                                              ? 'bg-indigo-100 text-indigo-700'
+                                              : hasDetail
+                                                ? 'text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50'
+                                                : 'text-gray-300 hover:text-indigo-500 hover:bg-indigo-50'
+                                          }`}
+                                          title="説明・動画・リンクを編集"
+                                        >
+                                          <FileText size={11} />
+                                          {hasDetail ? '詳細' : '追加'}
+                                        </button>
+                                        <button onClick={() => startEdit(small)} className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"><Pencil size={11} /></button>
+                                        <button onClick={() => deleteItem(small.id)} className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={11} /></button>
+                                      </>
+                                    )}
+                                  </div>
+                                  {/* 詳細パネル */}
+                                  {isDetailOpen && (
+                                    <SmallItemDetail
+                                      item={small}
+                                      onSaved={() => load(true)}
+                                    />
                                   )}
                                 </div>
                               )

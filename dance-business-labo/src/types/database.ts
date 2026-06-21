@@ -85,12 +85,20 @@ export type StudentRecord = {
   students?: Student
 }
 
+export type MediaItem = {
+  type: 'image' | 'video' | 'link'
+  url: string
+  label?: string
+}
+
 export type CurriculumItem = {
   id: string
   parent_id: string | null
   name: string
   level: 1 | 2 | 3
   display_order: number
+  description: string | null
+  media_items: MediaItem[]
   created_at: string
   children?: CurriculumItem[]
 }
