@@ -6,7 +6,7 @@ import type { Transaction, Student } from '@/types/database'
 import { Plus, Trash2, TrendingUp, TrendingDown, DollarSign, X, Loader2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const INCOME_CATEGORIES = ['レッスン収入', 'レッスン料', 'チケット販売', 'グッズ', 'その他収入']
-const EXPENSE_CATEGORIES = ['レッスン場代', '会場費', '交通費', '衣装・道具', '広告費', '通信費', 'その他経費']
+const EXPENSE_CATEGORIES = ['レッスン場代', '体験レッスン代', '会場費', '交通費', '衣装・道具', '広告費', '通信費', 'その他経費']
 const DEFAULT_VENUE = '山田ふれあい文化センター練習室'
 const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 const WEEKDAYS = ['日','月','火','水','木','金','土']
@@ -19,6 +19,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'チケット販売': 'bg-emerald-400',
   'グッズ': 'bg-teal-400',
   'その他収入': 'bg-cyan-400',
+  '体験レッスン代': 'bg-yellow-500',
   '会場費': 'bg-red-500',
   '交通費': 'bg-orange-400',
   '衣装・道具': 'bg-amber-400',
