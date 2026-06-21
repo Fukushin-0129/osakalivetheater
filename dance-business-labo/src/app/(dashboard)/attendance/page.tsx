@@ -3,16 +3,27 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, Student, Attendance } from '@/types/database'
-import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X } from 'lucide-react'
+import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X, ArrowLeftRight } from 'lucide-react'
 
 const STATUS_OPTIONS = [
-  { value: 'present',   label: '出席',       icon: UserCheck, active: 'bg-green-500 text-white',  inactive: 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600' },
-  { value: 'late',      label: '遅刻',       icon: Clock,     active: 'bg-yellow-400 text-white', inactive: 'bg-gray-100 text-gray-400 hover:bg-yellow-50 hover:text-yellow-600' },
-  { value: 'absent',    label: '欠席',       icon: UserX,     active: 'bg-red-400 text-white',    inactive: 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500' },
-  { value: 'cancelled', label: 'キャンセル', icon: Ban,       active: 'bg-gray-400 text-white',   inactive: 'bg-gray-100 text-gray-400 hover:bg-gray-200' },
+  { value: 'present',     label: '出席',       icon: UserCheck, active: 'bg-green-500 text-white',   inactive: 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600' },
+  { value: 'late',        label: '遅刻',       icon: Clock,     active: 'bg-yellow-400 text-white',  inactive: 'bg-gray-100 text-gray-400 hover:bg-yellow-50 hover:text-yellow-600' },
+  { value: 'absent',      label: '欠席',       icon: UserX,     active: 'bg-red-400 text-white',     inactive: 'bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500' },
+  { value: 'cancelled',   label: 'キャンセル', icon: Ban,       active: 'bg-gray-400 text-white',    inactive: 'bg-gray-100 text-gray-400 hover:bg-gray-200' },
+  { value: 'substituted', label: '振替',       icon: ArrowLeftRight, active: 'bg-purple-500 text-white', inactive: 'bg-gray-100 text-gray-400 hover:bg-purple-50 hover:text-purple-600' },
 ] as const
 
 type StatusValue = typeof STATUS_OPTIONS[number]['value']
+
+type StudentSub = {
+  id: string
+  student_id: string
+  original_lesson_id: string
+  substitute_lesson_id: string | null
+  notes: string | null
+}
+
+const CASH_CATEGORIES = ['レッスン収入', '体験レッスン収入', '出演収入', '入会金', '発表会参加費', 'グッズ販売', 'その他']
 
 function parseJST(s: string): Date {
   const clean = s.slice(0, 16).replace(' ', 'T')
@@ -33,10 +44,18 @@ export default function AttendancePage() {
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 
-  const CASH_CATEGORIES = ['レッスン収入', '体験レッスン収入', '出演収入', '入会金', '発表会参加費', 'グッズ販売', 'その他']
-
-  // 現金入力状態: studentId → { open, amount, category, saving, saved, savedLabel }
+  // 現金入力状態
   const [cashState, setCashState] = useState<Record<string, { open: boolean; amount: string; category: string; saving: boolean; saved: boolean; savedLabel?: string }>>({})
+
+  // 振替状態: このレッスンが振替元になっている記録（original_lesson_id === selectedLesson）
+  const [subsAsOriginal, setSubsAsOriginal] = useState<StudentSub[]>([])
+  // このレッスンが振替先になっている記録（substitute_lesson_id === selectedLesson）
+  const [subsAsSubstitute, setSubsAsSubstitute] = useState<StudentSub[]>([])
+  // 振替モーダル
+  const [subModalStudentId, setSubModalStudentId] = useState<string | null>(null)
+  const [subLessonId, setSubLessonId] = useState('')
+  const [subNotes, setSubNotes] = useState('')
+  const [subSaving, setSubSaving] = useState(false)
 
   const supabase = createClient()
 
@@ -66,13 +85,19 @@ export default function AttendancePage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedLesson) { setAttendance({}); return }
+    if (!selectedLesson) { setAttendance({}); setSubsAsOriginal([]); setSubsAsSubstitute([]); return }
     setLoadingLesson(true)
     setCashState({})
-    supabase.from('attendance').select('*').eq('lesson_id', selectedLesson).then(({ data }) => {
+    Promise.all([
+      supabase.from('attendance').select('*').eq('lesson_id', selectedLesson),
+      supabase.from('student_substitutions').select('*').eq('original_lesson_id', selectedLesson),
+      supabase.from('student_substitutions').select('*').eq('substitute_lesson_id', selectedLesson),
+    ]).then(([{ data: att }, { data: orig }, { data: sub }]) => {
       const map: Record<string, Attendance> = {}
-      for (const a of data ?? []) map[a.student_id] = a
+      for (const a of att ?? []) map[a.student_id] = a
       setAttendance(map)
+      setSubsAsOriginal(orig ?? [])
+      setSubsAsSubstitute(sub ?? [])
       setLoadingLesson(false)
     })
   }, [selectedLesson])
@@ -84,6 +109,8 @@ export default function AttendancePage() {
 
   async function setStatus(studentId: string, status: StatusValue) {
     if (!selectedLesson) return
+    // 振替ボタンはモーダルで設定するためここでは処理しない
+    if (status === 'substituted') { openSubModal(studentId); return }
     setSavingId(studentId)
     const existing = attendance[studentId]
     if (existing) {
@@ -92,13 +119,69 @@ export default function AttendancePage() {
         setAttendance(prev => { const n = { ...prev }; delete n[studentId]; return n })
       } else {
         await supabase.from('attendance').update({ status }).eq('id', existing.id)
-        setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], status } }))
+        setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], status } as unknown as Attendance }))
       }
     } else {
       const { data } = await supabase.from('attendance').insert({ lesson_id: selectedLesson, student_id: studentId, status }).select().single()
       if (data) setAttendance(prev => ({ ...prev, [studentId]: data }))
     }
     setSavingId(null)
+  }
+
+  function openSubModal(studentId: string) {
+    const existing = subsAsOriginal.find(s => s.student_id === studentId)
+    setSubLessonId(existing?.substitute_lesson_id ?? '')
+    setSubNotes(existing?.notes ?? '')
+    setSubModalStudentId(studentId)
+  }
+
+  async function saveSubstitution() {
+    if (!subModalStudentId || !subLessonId || !selectedLesson) return
+    setSubSaving(true)
+
+    // 出席ステータスを「振替」に更新
+    const existing = attendance[subModalStudentId]
+    if (existing) {
+      await supabase.from('attendance').update({ status: 'substituted' }).eq('id', existing.id)
+    } else {
+      const { data } = await supabase.from('attendance').insert({
+        lesson_id: selectedLesson,
+        student_id: subModalStudentId,
+        status: 'substituted',
+      }).select().single()
+      if (data) setAttendance(prev => ({ ...prev, [subModalStudentId]: data }))
+    }
+    setAttendance(prev => ({ ...prev, [subModalStudentId]: { ...prev[subModalStudentId], status: 'substituted' } as unknown as Attendance }))
+
+    // student_substitutions をupsert
+    await supabase.from('student_substitutions').upsert({
+      student_id: subModalStudentId,
+      original_lesson_id: selectedLesson,
+      substitute_lesson_id: subLessonId,
+      notes: subNotes || null,
+    }, { onConflict: 'student_id,original_lesson_id' })
+
+    // ローカル状態を更新
+    setSubsAsOriginal(prev => {
+      const filtered = prev.filter(s => s.student_id !== subModalStudentId)
+      return [...filtered, { id: '', student_id: subModalStudentId, original_lesson_id: selectedLesson, substitute_lesson_id: subLessonId, notes: subNotes || null }]
+    })
+
+    setSubSaving(false)
+    setSubModalStudentId(null)
+  }
+
+  async function removeSubstitution(studentId: string) {
+    if (!confirm('この生徒の振替設定を解除しますか？')) return
+    await supabase.from('student_substitutions').delete()
+      .eq('student_id', studentId).eq('original_lesson_id', selectedLesson)
+    // 出席ステータスも欠席に戻す
+    const existing = attendance[studentId]
+    if (existing) {
+      await supabase.from('attendance').update({ status: 'absent' }).eq('id', existing.id)
+      setAttendance(prev => ({ ...prev, [studentId]: { ...prev[studentId], status: 'absent' } as unknown as Attendance }))
+    }
+    setSubsAsOriginal(prev => prev.filter(s => s.student_id !== studentId))
   }
 
   function toggleCash(studentId: string) {
@@ -116,7 +199,6 @@ export default function AttendancePage() {
     const category = cs?.category || 'レッスン収入'
     const lessonData = lessons.find(l => l.id === selectedLesson)
     const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
-
     setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: true } }))
     const { error } = await supabase.from('transactions').insert({
       transaction_date: lessonDate,
@@ -156,6 +238,7 @@ export default function AttendancePage() {
       late: vals.filter(a => a.status === 'late').length,
       absent: vals.filter(a => a.status === 'absent').length,
       cancelled: vals.filter(a => a.status === 'cancelled').length,
+      substituted: vals.filter(a => a.status === 'substituted').length,
       unmarked: students.length - vals.length,
     }
   }, [attendance, students])
@@ -170,6 +253,8 @@ export default function AttendancePage() {
     return groups
   }, [lessons])
 
+  const subModalStudent = students.find(s => s.id === subModalStudentId)
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -178,10 +263,8 @@ export default function AttendancePage() {
           <p className="text-gray-500 text-sm mt-0.5">レッスンを選んで出席を記録</p>
         </div>
         {selectedLesson && students.length > 0 && (
-          <button
-            onClick={markAllPresent}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
-          >
+          <button onClick={markAllPresent}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors">
             <CheckCheck size={15} /> 全員出席
           </button>
         )}
@@ -226,13 +309,33 @@ export default function AttendancePage() {
                     {selectedLessonData.location && <span className="ml-2">📍{selectedLessonData.location}</span>}
                   </div>
                 </div>
-                <div className="flex gap-3 text-sm">
+                <div className="flex flex-wrap gap-3 text-sm">
                   <span className="text-green-700 font-medium">出席 {counts.present}</span>
                   <span className="text-yellow-600 font-medium">遅刻 {counts.late}</span>
                   <span className="text-red-500 font-medium">欠席 {counts.absent}</span>
+                  {counts.substituted > 0 && <span className="text-purple-600 font-medium">振替 {counts.substituted}</span>}
                   {counts.unmarked > 0 && <span className="text-gray-400">未記録 {counts.unmarked}</span>}
                 </div>
               </div>
+              {/* このレッスンへの振替出席者 */}
+              {subsAsSubstitute.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-indigo-200">
+                  <p className="text-xs text-indigo-500 font-medium mb-1.5">他レッスンからの振替出席:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {subsAsSubstitute.map(sub => {
+                      const stu = students.find(s => s.id === sub.student_id)
+                      const origLesson = lessons.find(l => l.id === sub.original_lesson_id)
+                      return (
+                        <span key={sub.id} className="inline-flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                          <ArrowLeftRight size={10} />
+                          {stu?.name ?? '不明'}
+                          {origLesson && <span className="opacity-70">（{parseJST(origLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}分）</span>}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -260,11 +363,20 @@ export default function AttendancePage() {
                     const a = attendance[s.id]
                     const isSaving = savingId === s.id
                     const cs = cashState[s.id]
+                    const subRecord = subsAsOriginal.find(sub => sub.student_id === s.id)
+                    const subLesson = subRecord?.substitute_lesson_id ? lessons.find(l => l.id === subRecord.substitute_lesson_id) : null
+                    const isSubstituteHere = subsAsSubstitute.some(sub => sub.student_id === s.id)
+
                     return (
-                      <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={s.id} className={`hover:bg-gray-50 transition-colors ${isSubstituteHere ? 'bg-purple-50/30' : ''}`}>
                         <td className="px-4 py-3">
                           <div className="font-medium text-gray-800">{s.name}</div>
                           {s.name_kana && <div className="text-xs text-gray-400">{s.name_kana}</div>}
+                          {isSubstituteHere && (
+                            <span className="inline-flex items-center gap-1 text-xs text-purple-600 mt-0.5">
+                              <ArrowLeftRight size={9} /> 振替出席
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
@@ -284,45 +396,47 @@ export default function AttendancePage() {
                               })
                             )}
                           </div>
+                          {/* 振替先の表示 */}
+                          {a?.status === 'substituted' && (
+                            <div className="mt-1.5 flex items-center gap-2">
+                              {subLesson ? (
+                                <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                                  → {parseJST(subLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })} に振替
+                                </span>
+                              ) : (
+                                <span className="text-xs text-purple-400">振替先未設定</span>
+                              )}
+                              <button onClick={() => openSubModal(s.id)} className="text-xs text-purple-500 hover:text-purple-700 underline">変更</button>
+                              <button onClick={() => removeSubstitution(s.id)} className="text-xs text-gray-400 hover:text-red-500 underline">解除</button>
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           {cs?.open ? (
                             <div className="flex flex-col gap-1.5 py-0.5">
-                              <select
-                                value={cs.category}
+                              <select value={cs.category}
                                 onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], category: e.target.value } }))}
-                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 bg-white"
-                              >
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
                                 {CASH_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                               </select>
                               <div className="flex items-center gap-1.5">
                                 <span className="text-gray-400 text-xs">¥</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={cs.amount}
+                                <input type="number" min="0" value={cs.amount}
                                   onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], amount: e.target.value } }))}
                                   onKeyDown={e => { if (e.key === 'Enter') saveCash(s.id, s.name); if (e.key === 'Escape') toggleCash(s.id) }}
                                   placeholder="金額"
                                   className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"
-                                  autoFocus
-                                />
+                                  autoFocus />
                                 <button onClick={() => saveCash(s.id, s.name)} disabled={cs.saving || !cs.amount}
                                   className="text-green-600 hover:text-green-800 p-1 disabled:opacity-40">
                                   {cs.saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                                 </button>
-                                <button onClick={() => toggleCash(s.id)} className="text-gray-400 hover:text-gray-600 p-1">
-                                  <X size={13} />
-                                </button>
+                                <button onClick={() => toggleCash(s.id)} className="text-gray-400 hover:text-gray-600 p-1"><X size={13} /></button>
                               </div>
                             </div>
                           ) : (
                             <button onClick={() => toggleCash(s.id)}
-                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${
-                                cs?.saved
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'
-                              }`}>
+                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${cs?.saved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'}`}>
                               <JapaneseYen size={12} />
                               {cs?.saved ? cs.savedLabel ?? '記録済み' : '現金'}
                             </button>
@@ -341,6 +455,7 @@ export default function AttendancePage() {
                 <span className="text-yellow-600 font-medium">⏰ 遅刻 {counts.late}名</span>
                 <span className="text-red-500 font-medium">✗ 欠席 {counts.absent}名</span>
                 <span className="text-gray-400 font-medium">🚫 キャンセル {counts.cancelled}名</span>
+                {counts.substituted > 0 && <span className="text-purple-600 font-medium">⇆ 振替 {counts.substituted}名</span>}
                 {counts.unmarked > 0 && <span className="text-gray-300 font-medium">— 未記録 {counts.unmarked}名</span>}
               </div>
             )}
@@ -352,6 +467,49 @@ export default function AttendancePage() {
         <div className="bg-white rounded-xl shadow-sm p-12 text-center text-gray-400">
           <ClipboardCheck size={36} className="mx-auto mb-3 opacity-20" />
           <p className="text-sm">上のセレクトからレッスンを選んでください</p>
+        </div>
+      )}
+
+      {/* 振替設定モーダル */}
+      {subModalStudentId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-base font-bold text-gray-800">振替設定</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {subModalStudent?.name} ／ 振替元: {selectedLessonData && parseJST(selectedLessonData.scheduled_at).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}
+                </p>
+              </div>
+              <button onClick={() => setSubModalStudentId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">振替先レッスン *</label>
+                <select value={subLessonId} onChange={e => setSubLessonId(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500">
+                  <option value="">振替先を選択</option>
+                  {lessons.filter(l => l.id !== selectedLesson).map(l => (
+                    <option key={l.id} value={l.id}>{formatLesson(l)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">メモ（任意）</label>
+                <input value={subNotes} onChange={e => setSubNotes(e.target.value)}
+                  placeholder="例: 旅行のため"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setSubModalStudentId(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
+              <button onClick={saveSubstitution} disabled={subSaving || !subLessonId}
+                className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white py-2.5 rounded-xl text-sm font-medium">
+                {subSaving && <Loader2 size={14} className="animate-spin" />}
+                {subSaving ? '保存中...' : '振替を設定'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

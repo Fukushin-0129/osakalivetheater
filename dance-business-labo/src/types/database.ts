@@ -40,7 +40,7 @@ export type Lesson = {
   lesson_types?: LessonType
 }
 
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'cancelled'
+export type AttendanceStatus = 'present' | 'absent' | 'late' | 'cancelled' | 'substituted'
 
 export type Attendance = {
   id: string
