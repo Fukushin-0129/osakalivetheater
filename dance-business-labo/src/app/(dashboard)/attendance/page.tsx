@@ -33,7 +33,7 @@ export default function AttendancePage() {
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 
-  const CASH_CATEGORIES = ['レッスン収入', '出演収入', '入会金', '発表会参加費', 'グッズ販売', 'その他']
+  const CASH_CATEGORIES = ['レッスン収入', '体験レッスン収入', '出演収入', '入会金', '発表会参加費', 'グッズ販売', 'その他']
 
   // 現金入力状態: studentId → { open, amount, category, saving, saved, savedLabel }
   const [cashState, setCashState] = useState<Record<string, { open: boolean; amount: string; category: string; saving: boolean; saved: boolean; savedLabel?: string }>>({})

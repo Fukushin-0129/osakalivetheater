@@ -191,7 +191,10 @@ for i in range(1, sh22.nrows):
     # その他入金 → transactions
     if nyukin_val and float(nyukin_val) > 0:
         t_uuid   = str(uuid.uuid4())
-        category = nyukin_fee if nyukin_fee else 'その他収入'
+        if taiken == 1.0:
+            category = '体験レッスン収入'
+        else:
+            category = nyukin_fee if nyukin_fee else 'その他収入'
         transactions_sql.append(
             f"('{t_uuid}', '{lesson_date}', 'income', {repr(category)}, {int(float(nyukin_val))}, "
             f"'参加者ID:{participant_id}', now())"
