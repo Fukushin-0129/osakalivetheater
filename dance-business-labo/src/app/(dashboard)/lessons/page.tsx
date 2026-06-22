@@ -53,7 +53,7 @@ export default function LessonsPage() {
   // 振替
   const [substitutions, setSubstitutions] = useState<SubRecord[]>([])
   const [subModal, setSubModal] = useState<LessonWithCount | null>(null)
-  const [subForm, setSubForm] = useState({ substitute_lesson_id: '', reason: '先生の都合', price_difference: '0', notes: '' })
+  const [subForm, setSubForm] = useState({ substitute_date: '', substitute_time: '19:00', reason: '先生の都合', price_difference: '0', notes: '' })
   const [subSaving, setSubSaving] = useState(false)
 
   const [calendarDate, setCalendarDate] = useState(new Date())
@@ -207,8 +207,10 @@ export default function LessonsPage() {
 
   function openSubModal(l: LessonWithCount) {
     const existing = substitutions.find(s => s.original_lesson_id === l.id)
+    const existingSubLesson = existing?.substitute_lesson_id ? lessons.find(ll => ll.id === existing.substitute_lesson_id) : null
     setSubForm({
-      substitute_lesson_id: existing?.substitute_lesson_id ?? '',
+      substitute_date: existingSubLesson ? existingSubLesson.scheduled_at.slice(0, 10) : '',
+      substitute_time: existingSubLesson ? existingSubLesson.scheduled_at.slice(11, 16) : '19:00',
       reason: existing?.reason ?? '先生の都合',
       price_difference: String(existing?.price_difference ?? 0),
       notes: existing?.notes ?? '',
@@ -217,11 +219,28 @@ export default function LessonsPage() {
   }
 
   async function handleSubSave() {
-    if (!subModal || !subForm.substitute_lesson_id) return
+    if (!subModal || !subForm.substitute_date || !subForm.substitute_time) return
     setSubSaving(true)
     const priceDiff = parseInt(subForm.price_difference) || 0
     const originalLesson = subModal
-    const subLesson = lessons.find(l => l.id === subForm.substitute_lesson_id)
+    const scheduledAt = `${subForm.substitute_date}T${subForm.substitute_time}`
+
+    // 振替先レッスンが既存か確認し、なければ自動作成
+    let subLessonId: string
+    const existingLesson = lessons.find(l => l.scheduled_at.slice(0, 16) === scheduledAt)
+    if (existingLesson) {
+      subLessonId = existingLesson.id
+    } else {
+      const { data: newLesson } = await supabase.from('lessons').insert({
+        title: originalLesson.title,
+        scheduled_at: scheduledAt,
+        location: originalLesson.location ?? DEFAULT_LOCATION,
+        max_capacity: originalLesson.max_capacity ?? 20,
+        notes: subForm.reason ? `振替レッスン（${subForm.reason}）` : '振替レッスン',
+      }).select().single()
+      if (!newLesson) { alert('振替先レッスンの作成に失敗しました'); setSubSaving(false); return }
+      subLessonId = newLesson.id
+    }
 
     // 既存の振替を削除してから再挿入
     const existing = substitutions.find(s => s.original_lesson_id === subModal.id)
@@ -230,7 +249,7 @@ export default function LessonsPage() {
     }
     await supabase.from('lesson_substitutions').insert({
       original_lesson_id: subModal.id,
-      substitute_lesson_id: subForm.substitute_lesson_id,
+      substitute_lesson_id: subLessonId,
       reason: subForm.reason || null,
       price_difference: priceDiff,
       notes: subForm.notes || null,
@@ -238,11 +257,10 @@ export default function LessonsPage() {
 
     // 差額を収支に計上
     if (priceDiff !== 0) {
-      const subDate = subLesson ? subLesson.scheduled_at.slice(0, 10) : originalLesson.scheduled_at.slice(0, 10)
       const origDate = parseJST(originalLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
-      const subDateLabel = subLesson ? parseJST(subLesson.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : ''
+      const subDateLabel = new Date(subForm.substitute_date).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })
       await supabase.from('transactions').insert({
-        transaction_date: subDate,
+        transaction_date: subForm.substitute_date,
         type: priceDiff > 0 ? 'income' : 'expense',
         category: '振替差額',
         amount: Math.abs(priceDiff),
@@ -746,22 +764,34 @@ export default function LessonsPage() {
             </div>
             <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">振替先レッスン *</label>
-                <select
-                  value={subForm.substitute_lesson_id}
-                  onChange={e => setSubForm(f => ({ ...f, substitute_lesson_id: e.target.value }))}
+                <label className="block text-xs font-medium text-gray-600 mb-1">振替先の日付 *</label>
+                <input
+                  type="date"
+                  value={subForm.substitute_date}
+                  onChange={e => setSubForm(f => ({ ...f, substitute_date: e.target.value }))}
                   className={inputCls}
-                >
-                  <option value="">振替先を選択してください</option>
-                  {[...lessons]
-                    .filter(l => l.id !== subModal.id)
-                    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
-                    .map(l => (
-                      <option key={l.id} value={l.id}>
-                        {parseJST(l.scheduled_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })} {l.title}
-                      </option>
-                    ))}
-                </select>
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">振替先の時間 *</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSubForm(f => ({ ...f, substitute_time: '19:00' }))}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${subForm.substitute_time === '19:00' ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  >19:00</button>
+                  <button
+                    type="button"
+                    onClick={() => setSubForm(f => ({ ...f, substitute_time: '20:15' }))}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${subForm.substitute_time === '20:15' ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  >20:15</button>
+                  <input
+                    type="time"
+                    value={subForm.substitute_time}
+                    onChange={e => setSubForm(f => ({ ...f, substitute_time: e.target.value }))}
+                    className={`${inputCls} flex-1`}
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">振替理由</label>
@@ -816,7 +846,7 @@ export default function LessonsPage() {
               <button onClick={() => setSubModal(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
               <button
                 onClick={handleSubSave}
-                disabled={subSaving || !subForm.substitute_lesson_id}
+                disabled={subSaving || !subForm.substitute_date || !subForm.substitute_time}
                 className="flex-1 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white py-2.5 rounded-xl text-sm font-medium"
               >
                 {subSaving && <Loader2 size={14} className="animate-spin" />}

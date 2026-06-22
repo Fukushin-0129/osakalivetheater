@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, Student, Attendance } from '@/types/database'
-import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X, ArrowLeftRight } from 'lucide-react'
+import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X, ArrowLeftRight, Plus, Trash2 } from 'lucide-react'
 
 const STATUS_OPTIONS = [
   { value: 'present',     label: '出席',       icon: UserCheck, active: 'bg-green-500 text-white',   inactive: 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600' },
@@ -44,8 +44,10 @@ export default function AttendancePage() {
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 
-  // 現金入力状態
-  const [cashState, setCashState] = useState<Record<string, { open: boolean; amount: string; category: string; saving: boolean; saved: boolean; savedLabel?: string }>>({})
+  type CashItem = { category: string; amount: string }
+  type CashEntry = { open: boolean; items: CashItem[]; saving: boolean; savedItems: { category: string; amount: number }[] }
+  // 現金入力状態（複数費目対応）
+  const [cashState, setCashState] = useState<Record<string, CashEntry>>({})
 
   // 振替状態: このレッスンが振替元になっている記録（original_lesson_id === selectedLesson）
   const [subsAsOriginal, setSubsAsOriginal] = useState<StudentSub[]>([])
@@ -188,35 +190,62 @@ export default function AttendancePage() {
     setCashState(prev => {
       const cur = prev[studentId]
       if (cur?.open) return { ...prev, [studentId]: { ...cur, open: false } }
-      return { ...prev, [studentId]: { open: true, amount: '', category: 'レッスン収入', saving: false, saved: false } }
+      return { ...prev, [studentId]: { open: true, items: [{ category: 'レッスン収入', amount: '' }], saving: false, savedItems: cur?.savedItems ?? [] } }
+    })
+  }
+
+  function setCashItem(studentId: string, idx: number, field: 'category' | 'amount', value: string) {
+    setCashState(prev => {
+      const items = [...(prev[studentId]?.items ?? [])]
+      items[idx] = { ...items[idx], [field]: value }
+      return { ...prev, [studentId]: { ...prev[studentId], items } }
+    })
+  }
+
+  function addCashItem(studentId: string) {
+    setCashState(prev => {
+      const items = [...(prev[studentId]?.items ?? []), { category: 'レッスン収入', amount: '' }]
+      return { ...prev, [studentId]: { ...prev[studentId], items } }
+    })
+  }
+
+  function removeCashItem(studentId: string, idx: number) {
+    setCashState(prev => {
+      const items = (prev[studentId]?.items ?? []).filter((_, i) => i !== idx)
+      return { ...prev, [studentId]: { ...prev[studentId], items: items.length ? items : [{ category: 'レッスン収入', amount: '' }] } }
     })
   }
 
   async function saveCash(studentId: string, studentName: string) {
     const cs = cashState[studentId]
-    const amount = parseInt(cs?.amount ?? '', 10)
-    if (!amount || amount <= 0) return
-    const category = cs?.category || 'レッスン収入'
+    const validItems = (cs?.items ?? []).filter(it => parseInt(it.amount, 10) > 0)
+    if (!validItems.length) return
     const lessonData = lessons.find(l => l.id === selectedLesson)
     const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
     setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: true } }))
-    const { error } = await supabase.from('transactions').insert({
+    const rows = validItems.map(it => ({
       transaction_date: lessonDate,
-      type: 'income',
-      category,
-      amount,
+      type: 'income' as const,
+      category: it.category,
+      amount: parseInt(it.amount, 10),
       description: `現金受取 - ${studentName}（${lessonData?.title ?? 'レッスン'}）`,
-    })
+    }))
+    const { error } = await supabase.from('transactions').insert(rows)
     if (error) {
       alert(`保存エラー: ${error.message}`)
       setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: false } }))
       return
     }
-    const savedLabel = `${category} ¥${amount.toLocaleString()}`
-    setCashState(prev => ({ ...prev, [studentId]: { open: false, amount: '', category: 'レッスン収入', saving: false, saved: true, savedLabel } }))
-    setTimeout(() => {
-      setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saved: false, savedLabel: undefined } }))
-    }, 5000)
+    const newSaved = validItems.map(it => ({ category: it.category, amount: parseInt(it.amount, 10) }))
+    setCashState(prev => ({
+      ...prev,
+      [studentId]: {
+        open: false,
+        items: [{ category: 'レッスン収入', amount: '' }],
+        saving: false,
+        savedItems: [...(prev[studentId]?.savedItems ?? []), ...newSaved],
+      }
+    }))
   }
 
   async function markAllPresent() {
@@ -413,21 +442,36 @@ export default function AttendancePage() {
                         </td>
                         <td className="px-4 py-3">
                           {cs?.open ? (
-                            <div className="flex flex-col gap-1.5 py-0.5">
-                              <select value={cs.category}
-                                onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], category: e.target.value } }))}
-                                className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 bg-white">
-                                {CASH_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-gray-400 text-xs">¥</span>
-                                <input type="number" min="0" value={cs.amount}
-                                  onChange={e => setCashState(prev => ({ ...prev, [s.id]: { ...prev[s.id], amount: e.target.value } }))}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveCash(s.id, s.name); if (e.key === 'Escape') toggleCash(s.id) }}
-                                  placeholder="金額"
-                                  className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"
-                                  autoFocus />
-                                <button onClick={() => saveCash(s.id, s.name)} disabled={cs.saving || !cs.amount}
+                            <div className="flex flex-col gap-1.5 py-0.5 min-w-[220px]">
+                              {(cs.items ?? []).map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-1">
+                                  <select value={item.category}
+                                    onChange={e => setCashItem(s.id, idx, 'category', e.target.value)}
+                                    className="flex-1 border border-gray-200 rounded-lg px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 bg-white min-w-0">
+                                    {CASH_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                  <span className="text-gray-400 text-xs flex-shrink-0">¥</span>
+                                  <input type="number" min="0" value={item.amount}
+                                    onChange={e => setCashItem(s.id, idx, 'amount', e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') saveCash(s.id, s.name); if (e.key === 'Escape') toggleCash(s.id) }}
+                                    placeholder="金額"
+                                    className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 flex-shrink-0"
+                                    autoFocus={idx === 0} />
+                                  {(cs.items ?? []).length > 1 && (
+                                    <button onClick={() => removeCashItem(s.id, idx)} className="text-gray-300 hover:text-red-400 flex-shrink-0 p-0.5">
+                                      <Trash2 size={11} />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <button onClick={() => addCashItem(s.id)}
+                                  className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 px-1.5 py-0.5 rounded border border-green-200 hover:bg-green-50">
+                                  <Plus size={11} /> 追加
+                                </button>
+                                <div className="flex-1" />
+                                <button onClick={() => saveCash(s.id, s.name)}
+                                  disabled={cs.saving || !(cs.items ?? []).some(it => parseInt(it.amount, 10) > 0)}
                                   className="text-green-600 hover:text-green-800 p-1 disabled:opacity-40">
                                   {cs.saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                                 </button>
@@ -435,11 +479,19 @@ export default function AttendancePage() {
                               </div>
                             </div>
                           ) : (
-                            <button onClick={() => toggleCash(s.id)}
-                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${cs?.saved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'}`}>
-                              <JapaneseYen size={12} />
-                              {cs?.saved ? cs.savedLabel ?? '記録済み' : '現金'}
-                            </button>
+                            <div className="flex flex-col gap-1">
+                              {(cs?.savedItems ?? []).map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                                  <Check size={10} />
+                                  <span>{item.category} ¥{item.amount.toLocaleString()}</span>
+                                </div>
+                              ))}
+                              <button onClick={() => toggleCash(s.id)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600 w-fit">
+                                <JapaneseYen size={12} />
+                                {(cs?.savedItems ?? []).length > 0 ? '追加入力' : '現金'}
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
