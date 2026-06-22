@@ -45,7 +45,7 @@ export default function AttendancePage() {
   const [savingId, setSavingId] = useState<string | null>(null)
 
   type CashItem = { category: string; amount: string }
-  type CashEntry = { open: boolean; items: CashItem[]; saving: boolean; saved: boolean; savedLabel?: string }
+  type CashEntry = { open: boolean; items: CashItem[]; saving: boolean; savedItems: { category: string; amount: number }[] }
   // 現金入力状態（複数費目対応）
   const [cashState, setCashState] = useState<Record<string, CashEntry>>({})
 
@@ -190,7 +190,7 @@ export default function AttendancePage() {
     setCashState(prev => {
       const cur = prev[studentId]
       if (cur?.open) return { ...prev, [studentId]: { ...cur, open: false } }
-      return { ...prev, [studentId]: { open: true, items: [{ category: 'レッスン収入', amount: '' }], saving: false, saved: false } }
+      return { ...prev, [studentId]: { open: true, items: [{ category: 'レッスン収入', amount: '' }], saving: false, savedItems: cur?.savedItems ?? [] } }
     })
   }
 
@@ -236,14 +236,16 @@ export default function AttendancePage() {
       setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: false } }))
       return
     }
-    const total = validItems.reduce((sum, it) => sum + parseInt(it.amount, 10), 0)
-    const savedLabel = validItems.length === 1
-      ? `${validItems[0].category} ¥${total.toLocaleString()}`
-      : `${validItems.length}件 合計¥${total.toLocaleString()}`
-    setCashState(prev => ({ ...prev, [studentId]: { open: false, items: [{ category: 'レッスン収入', amount: '' }], saving: false, saved: true, savedLabel } }))
-    setTimeout(() => {
-      setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saved: false, savedLabel: undefined } }))
-    }, 5000)
+    const newSaved = validItems.map(it => ({ category: it.category, amount: parseInt(it.amount, 10) }))
+    setCashState(prev => ({
+      ...prev,
+      [studentId]: {
+        open: false,
+        items: [{ category: 'レッスン収入', amount: '' }],
+        saving: false,
+        savedItems: [...(prev[studentId]?.savedItems ?? []), ...newSaved],
+      }
+    }))
   }
 
   async function markAllPresent() {
@@ -477,11 +479,19 @@ export default function AttendancePage() {
                               </div>
                             </div>
                           ) : (
-                            <button onClick={() => toggleCash(s.id)}
-                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all ${cs?.saved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'}`}>
-                              <JapaneseYen size={12} />
-                              {cs?.saved ? cs.savedLabel ?? '記録済み' : '現金'}
-                            </button>
+                            <div className="flex flex-col gap-1">
+                              {(cs?.savedItems ?? []).map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                                  <Check size={10} />
+                                  <span>{item.category} ¥{item.amount.toLocaleString()}</span>
+                                </div>
+                              ))}
+                              <button onClick={() => toggleCash(s.id)}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600 w-fit">
+                                <JapaneseYen size={12} />
+                                {(cs?.savedItems ?? []).length > 0 ? '追加入力' : '現金'}
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
