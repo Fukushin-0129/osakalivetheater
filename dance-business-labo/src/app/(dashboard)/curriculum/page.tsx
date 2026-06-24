@@ -7,6 +7,34 @@ import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, Loader2, Gri
 
 type TreeItem = CurriculumItem & { children: TreeItem[] }
 
+function getYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url)
+    if (u.hostname.includes('youtube.com')) return u.searchParams.get('v')
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1)
+  } catch {}
+  return null
+}
+
+function VideoThumbnail({ url }: { url: string }) {
+  const ytId = getYouTubeId(url)
+  if (!ytId) return null
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative">
+      <img
+        src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+        alt="動画サムネイル"
+        className="w-20 h-14 object-cover rounded-lg border border-gray-200 group-hover:opacity-80 transition-opacity"
+      />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="bg-black/60 rounded-full p-1.5 group-hover:bg-black/80 transition-colors">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+      </div>
+    </a>
+  )
+}
+
 export default function CurriculumPage() {
   const supabase = createClient()
   const [tree, setTree] = useState<TreeItem[]>([])
@@ -313,6 +341,7 @@ export default function CurriculumPage() {
                     >
                       {root.name}
                     </span>
+                    {root.video_url && <VideoThumbnail url={root.video_url} />}
                     <span className="text-xs text-indigo-400 mr-1">{root.children.length}項目</span>
                     {root.video_url && <a href={root.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-100 transition-colors" title="動画を開く"><ExternalLink size={13} /></a>}
                     <button onClick={() => openVideoEdit(root)} className={`p-1 rounded hover:bg-indigo-100 transition-colors ${root.video_url ? 'text-indigo-500' : 'text-indigo-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={13} /></button>
@@ -362,6 +391,7 @@ export default function CurriculumPage() {
                               >
                                 {mid.name}
                               </span>
+                              {mid.video_url && <VideoThumbnail url={mid.video_url} />}
                               <span className="text-xs text-gray-400 mr-1">{(mid.children ?? []).length}項目</span>
                               {mid.video_url && <a href={mid.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors" title="動画を開く"><ExternalLink size={12} /></a>}
                               <button onClick={() => openVideoEdit(mid)} className={`p-1 rounded hover:bg-indigo-50 transition-colors ${mid.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={12} /></button>
@@ -408,6 +438,7 @@ export default function CurriculumPage() {
                                       >
                                         {small.name}
                                       </span>
+                                      {small.video_url && <VideoThumbnail url={small.video_url} />}
                                       {small.video_url && <a href={small.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors" title="動画を開く"><ExternalLink size={11} /></a>}
                                       <button onClick={() => openVideoEdit(small)} className={`p-1 rounded hover:bg-indigo-50 transition-colors ${small.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={11} /></button>
                                       <button onClick={() => startEdit(small)} className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"><Pencil size={11} /></button>
