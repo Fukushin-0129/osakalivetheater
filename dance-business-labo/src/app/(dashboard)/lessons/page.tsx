@@ -210,7 +210,7 @@ export default function LessonsPage() {
     const existingSubLesson = existing?.substitute_lesson_id ? lessons.find(ll => ll.id === existing.substitute_lesson_id) : null
     setSubForm({
       substitute_date: existingSubLesson ? existingSubLesson.scheduled_at.slice(0, 10) : '',
-      substitute_time: existingSubLesson ? existingSubLesson.scheduled_at.slice(11, 16) : '19:00',
+      substitute_time: existingSubLesson ? parseJST(existingSubLesson.scheduled_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false }) : '19:00',
       reason: existing?.reason ?? '先生の都合',
       price_difference: String(existing?.price_difference ?? 0),
       notes: existing?.notes ?? '',
@@ -786,7 +786,8 @@ export default function LessonsPage() {
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${subForm.substitute_time === '20:15' ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
                   >20:15</button>
                   <input
-                    type="time"
+                    type="text"
+                    placeholder="HH:MM"
                     value={subForm.substitute_time}
                     onChange={e => setSubForm(f => ({ ...f, substitute_time: e.target.value }))}
                     className={`${inputCls} flex-1`}
