@@ -91,6 +91,7 @@ export type CurriculumItem = {
   name: string
   level: 1 | 2 | 3
   display_order: number
+  video_url?: string | null
   created_at: string
   children?: CurriculumItem[]
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { CurriculumItem } from '@/types/database'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, Loader2, GripVertical, BookOpen } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, Loader2, GripVertical, BookOpen, Video, ExternalLink } from 'lucide-react'
 
 type TreeItem = CurriculumItem & { children: TreeItem[] }
 
@@ -18,6 +18,9 @@ export default function CurriculumPage() {
   const [addingTo, setAddingTo] = useState<{ parentId: string | null; level: number } | null>(null)
   const [newName, setNewName] = useState('')
   const [saving, setSaving] = useState(false)
+  // 動画URL編集
+  const [videoEditId, setVideoEditId] = useState<string | null>(null)
+  const [videoEditUrl, setVideoEditUrl] = useState('')
 
   // ドラッグ状態
   // grabbedId: グリップを掴んでいる行だけ draggable にする（IME干渉防止）
@@ -112,6 +115,20 @@ export default function CurriculumPage() {
     setAddingTo(null)
     setNewName('')
     load(true)
+  }
+
+  async function saveVideoUrl(id: string) {
+    setSaving(true)
+    await supabase.from('curriculum_items').update({ video_url: videoEditUrl.trim() || null }).eq('id', id)
+    setSaving(false)
+    setVideoEditId(null)
+    load(true)
+  }
+
+  function openVideoEdit(item: CurriculumItem) {
+    setVideoEditId(item.id)
+    setVideoEditUrl(item.video_url ?? '')
+    setEditingId(null)
   }
 
   function startAdd(parentId: string | null, level: number) {
@@ -297,6 +314,8 @@ export default function CurriculumPage() {
                       {root.name}
                     </span>
                     <span className="text-xs text-indigo-400 mr-1">{root.children.length}項目</span>
+                    {root.video_url && <a href={root.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-100 transition-colors" title="動画を開く"><ExternalLink size={13} /></a>}
+                    <button onClick={() => openVideoEdit(root)} className={`p-1 rounded hover:bg-indigo-100 transition-colors ${root.video_url ? 'text-indigo-500' : 'text-indigo-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={13} /></button>
                     <button onClick={() => startEdit(root)} className="text-indigo-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-100 transition-colors"><Pencil size={13} /></button>
                     <button onClick={() => deleteItem(root.id)} className="text-indigo-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={13} /></button>
                   </>
@@ -344,6 +363,8 @@ export default function CurriculumPage() {
                                 {mid.name}
                               </span>
                               <span className="text-xs text-gray-400 mr-1">{(mid.children ?? []).length}項目</span>
+                              {mid.video_url && <a href={mid.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors" title="動画を開く"><ExternalLink size={12} /></a>}
+                              <button onClick={() => openVideoEdit(mid)} className={`p-1 rounded hover:bg-indigo-50 transition-colors ${mid.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={12} /></button>
                               <button onClick={() => startEdit(mid)} className="text-gray-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"><Pencil size={12} /></button>
                               <button onClick={() => deleteItem(mid.id)} className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={12} /></button>
                             </>
@@ -387,6 +408,8 @@ export default function CurriculumPage() {
                                       >
                                         {small.name}
                                       </span>
+                                      {small.video_url && <a href={small.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors" title="動画を開く"><ExternalLink size={11} /></a>}
+                                      <button onClick={() => openVideoEdit(small)} className={`p-1 rounded hover:bg-indigo-50 transition-colors ${small.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={11} /></button>
                                       <button onClick={() => startEdit(small)} className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"><Pencil size={11} /></button>
                                       <button onClick={() => deleteItem(small.id)} className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={11} /></button>
                                     </>
@@ -450,6 +473,44 @@ export default function CurriculumPage() {
           )
         })}
       </div>
+
+      {/* 動画URLモーダル */}
+      {videoEditId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-bold text-gray-800 flex items-center gap-2"><Video size={16} /> 動画リンクを設定</h2>
+              <button onClick={() => setVideoEditId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <label className="block text-xs font-medium text-gray-600 mb-1">YouTube / 動画URL</label>
+              <input
+                type="url"
+                value={videoEditUrl}
+                onChange={e => setVideoEditUrl(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveVideoUrl(videoEditId) }}
+                placeholder="https://www.youtube.com/watch?v=..."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                autoFocus
+              />
+              {videoEditUrl && (
+                <a href={videoEditUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-indigo-500 hover:underline">
+                  <ExternalLink size={11} /> プレビュー（新しいタブで開く）
+                </a>
+              )}
+              <p className="text-xs text-gray-400">空欄にして保存するとリンクを削除します</p>
+            </div>
+            <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
+              <button onClick={() => setVideoEditId(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
+              <button onClick={() => saveVideoUrl(videoEditId)} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2.5 rounded-xl text-sm font-medium">
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 使い方の説明 */}
       <div className="mt-8 bg-indigo-50 rounded-xl p-5 text-sm text-indigo-700">
