@@ -103,12 +103,20 @@ export default function AttendancePage() {
         }
         const cashMap: Record<string, SavedCashItem[]> = {}
         for (const txn of txns) {
-          const matchedStudent = sts.find(st => txn.description?.startsWith(`現金受取 - ${st.name}（`))
-          if (!matchedStudent) continue
-          const dayLessons = dateToLessons[txn.transaction_date] ?? []
-          const matchedLesson = dayLessons.find(l => txn.description?.includes(`（${l.title}）`)) ?? dayLessons[0]
-          if (!matchedLesson) continue
-          const key = `${matchedLesson.id}:${matchedStudent.id}`
+          let lessonId: string | null = (txn as Record<string, unknown>).lesson_id as string | null ?? null
+          let studentId: string | null = (txn as Record<string, unknown>).student_id as string | null ?? null
+          // 新しいレコードはlesson_id/student_idで直接マッチ
+          if (!lessonId || !studentId) {
+            // 旧レコード: 説明文でマッチ
+            const matchedStudent = sts.find(st => txn.description?.startsWith(`現金受取 - ${st.name}（`))
+            if (!matchedStudent) continue
+            const dayLessons = dateToLessons[txn.transaction_date] ?? []
+            const matchedLesson = dayLessons.find(l => txn.description?.includes(`（${l.title}）`)) ?? dayLessons[0]
+            if (!matchedLesson) continue
+            lessonId = matchedLesson.id
+            studentId = matchedStudent.id
+          }
+          const key = `${lessonId}:${studentId}`
           if (!cashMap[key]) cashMap[key] = []
           cashMap[key].push({ id: txn.id, category: txn.category, amount: txn.amount })
         }
@@ -266,6 +274,8 @@ export default function AttendancePage() {
       category: it.category,
       amount: parseInt(it.amount, 10),
       description: `現金受取 - ${studentName}（${lessonData?.title ?? 'レッスン'}）`,
+      lesson_id: selectedLesson,
+      student_id: studentId,
     }))
     const { data: inserted, error: insertError } = await supabase.from('transactions').insert(rows).select('id, category, amount')
     if (insertError) {
@@ -309,6 +319,8 @@ export default function AttendancePage() {
         category: it.category,
         amount: parseInt(it.amount, 10),
         description: `現金受取 - ${studentName}（${lessonData?.title ?? 'レッスン'}）`,
+        lesson_id: editCashKey.split(':')[0],
+        student_id: studentId,
       }))
       const { data: inserted } = await supabase.from('transactions').insert(rows).select('id, category, amount')
       const newSaved: SavedCashItem[] = (inserted ?? []).map(r => ({ id: r.id, category: r.category, amount: r.amount }))
