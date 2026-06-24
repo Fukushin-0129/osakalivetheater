@@ -47,14 +47,16 @@ export default function AttendancePage() {
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 
-  // 現金入力状態（複数費目対応）
-  const [cashState, setCashState] = useState<Record<string, CashEntry>>({})
+  // 現金入力UI状態（開閉・入力中の値のみ。保存済みはsavedCashに分離）
+  const [cashOpen, setCashOpen] = useState<Record<string, boolean>>({})
+  const [cashItems, setCashItemsState] = useState<Record<string, CashItem[]>>({})
+  const [cashSaving, setCashSaving] = useState<Record<string, boolean>>({})
+  // 保存済み現金: キー = `${lessonId}:${studentId}`、レッスン切り替えで消えない
+  const [savedCash, setSavedCash] = useState<Record<string, { category: string; amount: number }[]>>({})
 
-  // 振替状態: このレッスンが振替元になっている記録（original_lesson_id === selectedLesson）
+  // 振替状態
   const [subsAsOriginal, setSubsAsOriginal] = useState<StudentSub[]>([])
-  // このレッスンが振替先になっている記録（substitute_lesson_id === selectedLesson）
   const [subsAsSubstitute, setSubsAsSubstitute] = useState<StudentSub[]>([])
-  // 振替モーダル
   const [subModalStudentId, setSubModalStudentId] = useState<string | null>(null)
   const [subLessonId, setSubLessonId] = useState('')
   const [subNotes, setSubNotes] = useState('')
@@ -62,6 +64,7 @@ export default function AttendancePage() {
 
   const supabase = createClient()
 
+  // 初回ロード: レッスン・生徒・過去の現金取引を一括取得
   useEffect(() => {
     const from = new Date()
     from.setFullYear(from.getFullYear() - 1)
@@ -74,10 +77,41 @@ export default function AttendancePage() {
         .lte('scheduled_at', to.toISOString())
         .order('scheduled_at', { ascending: true }),
       supabase.from('students').select('*').eq('is_active', true).order('name_kana'),
-    ]).then(([{ data: l }, { data: s }]) => {
+      supabase.from('transactions').select('*')
+        .eq('type', 'income')
+        .like('description', '現金受取 -%')
+        .gte('transaction_date', from.toISOString().slice(0, 10))
+        .lte('transaction_date', to.toISOString().slice(0, 10)),
+    ]).then(([{ data: l }, { data: s }, { data: txns }]) => {
       const ls = l ?? []
+      const sts = s ?? []
       setLessons(ls)
-      setStudents(s ?? [])
+      setStudents(sts)
+
+      // 現金取引をlessonId:studentIdキーでマップ化
+      if (txns && txns.length > 0 && ls.length > 0 && sts.length > 0) {
+        // 日付→レッスンIDのマップ（同日複数レッスンは最初の1つ）
+        const dateToLessons: Record<string, Lesson[]> = {}
+        for (const lesson of ls) {
+          const date = lesson.scheduled_at.slice(0, 10)
+          if (!dateToLessons[date]) dateToLessons[date] = []
+          dateToLessons[date].push(lesson)
+        }
+        const cashMap: Record<string, { category: string; amount: number }[]> = {}
+        for (const txn of txns) {
+          const matchedStudent = sts.find(st => txn.description?.startsWith(`現金受取 - ${st.name}（`))
+          if (!matchedStudent) continue
+          const dayLessons = dateToLessons[txn.transaction_date] ?? []
+          // レッスンタイトルが含まれるものを優先マッチ
+          const matchedLesson = dayLessons.find(l => txn.description?.includes(`（${l.title}）`)) ?? dayLessons[0]
+          if (!matchedLesson) continue
+          const key = `${matchedLesson.id}:${matchedStudent.id}`
+          if (!cashMap[key]) cashMap[key] = []
+          cashMap[key].push({ category: txn.category, amount: txn.amount })
+        }
+        setSavedCash(cashMap)
+      }
+
       if (ls.length > 0) {
         const now = new Date()
         const upcoming = ls.find(lesson => parseJST(lesson.scheduled_at) >= now)
@@ -88,9 +122,8 @@ export default function AttendancePage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedLesson) { setAttendance({}); setSubsAsOriginal([]); setSubsAsSubstitute([]); setCashState({}); return }
+    if (!selectedLesson) { setAttendance({}); setSubsAsOriginal([]); setSubsAsSubstitute([]); return }
     setLoadingLesson(true)
-    setCashState({})
     Promise.all([
       supabase.from('attendance').select('*').eq('lesson_id', selectedLesson),
       supabase.from('student_substitutions').select('*').eq('original_lesson_id', selectedLesson),
@@ -104,35 +137,6 @@ export default function AttendancePage() {
       setLoadingLesson(false)
     })
   }, [selectedLesson])
-
-  // 現金取引の復元（selectedLesson または students/lessons が揃ったタイミングで実行）
-  useEffect(() => {
-    if (!selectedLesson || students.length === 0) return
-    const lessonData = lessons.find(l => l.id === selectedLesson)
-    if (!lessonData) return
-    const lessonDate = lessonData.scheduled_at.slice(0, 10)
-    supabase.from('transactions').select('*')
-      .eq('transaction_date', lessonDate)
-      .eq('type', 'income')
-      .like('description', '現金受取 -%')
-      .then(({ data: txns }) => {
-        if (!txns || txns.length === 0) return
-        const newCashState: Record<string, CashEntry> = {}
-        for (const student of students) {
-          const prefix = `現金受取 - ${student.name}（`
-          const studentTxns = txns.filter((t: { description?: string }) => t.description?.startsWith(prefix))
-          if (studentTxns.length > 0) {
-            newCashState[student.id] = {
-              open: false,
-              items: [{ category: 'レッスン収入', amount: '' }],
-              saving: false,
-              savedItems: studentTxns.map((t: { category: string; amount: number }) => ({ category: t.category, amount: t.amount })),
-            }
-          }
-        }
-        setCashState(newCashState)
-      })
-  }, [selectedLesson, students, lessons])
 
   const currentIndex = useMemo(() => lessons.findIndex(l => l.id === selectedLesson), [lessons, selectedLesson])
 
@@ -217,42 +221,42 @@ export default function AttendancePage() {
   }
 
   function toggleCash(studentId: string) {
-    setCashState(prev => {
-      const cur = prev[studentId]
-      if (cur?.open) return { ...prev, [studentId]: { ...cur, open: false } }
-      return { ...prev, [studentId]: { open: true, items: [{ category: 'レッスン収入', amount: '' }], saving: false, savedItems: cur?.savedItems ?? [] } }
+    setCashOpen(prev => ({ ...prev, [studentId]: !prev[studentId] }))
+    setCashItemsState(prev => {
+      if (prev[studentId]) return prev
+      return { ...prev, [studentId]: [{ category: 'レッスン収入', amount: '' }] }
     })
   }
 
   function setCashItem(studentId: string, idx: number, field: 'category' | 'amount', value: string) {
-    setCashState(prev => {
-      const items = [...(prev[studentId]?.items ?? [])]
+    setCashItemsState(prev => {
+      const items = [...(prev[studentId] ?? [])]
       items[idx] = { ...items[idx], [field]: value }
-      return { ...prev, [studentId]: { ...prev[studentId], items } }
+      return { ...prev, [studentId]: items }
     })
   }
 
   function addCashItem(studentId: string) {
-    setCashState(prev => {
-      const items = [...(prev[studentId]?.items ?? []), { category: 'レッスン収入', amount: '' }]
-      return { ...prev, [studentId]: { ...prev[studentId], items } }
-    })
+    setCashItemsState(prev => ({
+      ...prev,
+      [studentId]: [...(prev[studentId] ?? []), { category: 'レッスン収入', amount: '' }],
+    }))
   }
 
   function removeCashItem(studentId: string, idx: number) {
-    setCashState(prev => {
-      const items = (prev[studentId]?.items ?? []).filter((_, i) => i !== idx)
-      return { ...prev, [studentId]: { ...prev[studentId], items: items.length ? items : [{ category: 'レッスン収入', amount: '' }] } }
+    setCashItemsState(prev => {
+      const items = (prev[studentId] ?? []).filter((_, i) => i !== idx)
+      return { ...prev, [studentId]: items.length ? items : [{ category: 'レッスン収入', amount: '' }] }
     })
   }
 
   async function saveCash(studentId: string, studentName: string) {
-    const cs = cashState[studentId]
-    const validItems = (cs?.items ?? []).filter(it => parseInt(it.amount, 10) > 0)
+    const items = cashItems[studentId] ?? []
+    const validItems = items.filter(it => parseInt(it.amount, 10) > 0)
     if (!validItems.length) return
     const lessonData = lessons.find(l => l.id === selectedLesson)
     const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
-    setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: true } }))
+    setCashSaving(prev => ({ ...prev, [studentId]: true }))
     const rows = validItems.map(it => ({
       transaction_date: lessonDate,
       type: 'income' as const,
@@ -263,19 +267,15 @@ export default function AttendancePage() {
     const { error } = await supabase.from('transactions').insert(rows)
     if (error) {
       alert(`保存エラー: ${error.message}`)
-      setCashState(prev => ({ ...prev, [studentId]: { ...prev[studentId], saving: false } }))
+      setCashSaving(prev => ({ ...prev, [studentId]: false }))
       return
     }
     const newSaved = validItems.map(it => ({ category: it.category, amount: parseInt(it.amount, 10) }))
-    setCashState(prev => ({
-      ...prev,
-      [studentId]: {
-        open: false,
-        items: [{ category: 'レッスン収入', amount: '' }],
-        saving: false,
-        savedItems: [...(prev[studentId]?.savedItems ?? []), ...newSaved],
-      }
-    }))
+    const key = `${selectedLesson}:${studentId}`
+    setSavedCash(prev => ({ ...prev, [key]: [...(prev[key] ?? []), ...newSaved] }))
+    setCashOpen(prev => ({ ...prev, [studentId]: false }))
+    setCashItemsState(prev => ({ ...prev, [studentId]: [{ category: 'レッスン収入', amount: '' }] }))
+    setCashSaving(prev => ({ ...prev, [studentId]: false }))
   }
 
   async function markAllPresent() {
@@ -432,7 +432,11 @@ export default function AttendancePage() {
                   }).map(s => {
                     const a = attendance[s.id]
                     const isSaving = savingId === s.id
-                    const cs = cashState[s.id]
+                    const isOpen = cashOpen[s.id] ?? false
+                    const items = cashItems[s.id] ?? [{ category: 'レッスン収入', amount: '' }]
+                    const isCashSaving = cashSaving[s.id] ?? false
+                    const cashKey = `${selectedLesson}:${s.id}`
+                    const savedItems = savedCash[cashKey] ?? []
                     const subRecord = subsAsOriginal.find(sub => sub.student_id === s.id)
                     const subLesson = subRecord?.substitute_lesson_id ? lessons.find(l => l.id === subRecord.substitute_lesson_id) : null
                     const isSubstituteHere = subsAsSubstitute.some(sub => sub.student_id === s.id)
@@ -466,7 +470,6 @@ export default function AttendancePage() {
                               })
                             )}
                           </div>
-                          {/* 振替先の表示 */}
                           {a?.status === 'substituted' && (
                             <div className="mt-1.5 flex items-center gap-2">
                               {subLesson ? (
@@ -482,9 +485,9 @@ export default function AttendancePage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {cs?.open ? (
+                          {isOpen ? (
                             <div className="flex flex-col gap-1.5 py-0.5 min-w-[220px]">
-                              {(cs.items ?? []).map((item, idx) => (
+                              {items.map((item, idx) => (
                                 <div key={idx} className="flex items-center gap-1">
                                   <select value={item.category}
                                     onChange={e => setCashItem(s.id, idx, 'category', e.target.value)}
@@ -498,7 +501,7 @@ export default function AttendancePage() {
                                     placeholder="金額"
                                     className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400 flex-shrink-0"
                                     autoFocus={idx === 0} />
-                                  {(cs.items ?? []).length > 1 && (
+                                  {items.length > 1 && (
                                     <button onClick={() => removeCashItem(s.id, idx)} className="text-gray-300 hover:text-red-400 flex-shrink-0 p-0.5">
                                       <Trash2 size={11} />
                                     </button>
@@ -512,16 +515,16 @@ export default function AttendancePage() {
                                 </button>
                                 <div className="flex-1" />
                                 <button onClick={() => saveCash(s.id, s.name)}
-                                  disabled={cs.saving || !(cs.items ?? []).some(it => parseInt(it.amount, 10) > 0)}
+                                  disabled={isCashSaving || !items.some(it => parseInt(it.amount, 10) > 0)}
                                   className="text-green-600 hover:text-green-800 p-1 disabled:opacity-40">
-                                  {cs.saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                                  {isCashSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
                                 </button>
                                 <button onClick={() => toggleCash(s.id)} className="text-gray-400 hover:text-gray-600 p-1"><X size={13} /></button>
                               </div>
                             </div>
                           ) : (
                             <div className="flex flex-col gap-1">
-                              {(cs?.savedItems ?? []).map((item, idx) => (
+                              {savedItems.map((item, idx) => (
                                 <div key={idx} className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
                                   <Check size={10} />
                                   <span>{item.category} ¥{item.amount.toLocaleString()}</span>
@@ -530,7 +533,7 @@ export default function AttendancePage() {
                               <button onClick={() => toggleCash(s.id)}
                                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600 w-fit">
                                 <JapaneseYen size={12} />
-                                {(cs?.savedItems ?? []).length > 0 ? '追加入力' : '現金'}
+                                {savedItems.length > 0 ? '追加入力' : '現金'}
                               </button>
                             </div>
                           )}
