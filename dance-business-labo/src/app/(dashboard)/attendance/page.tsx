@@ -88,27 +88,35 @@ export default function AttendancePage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedLesson) { setAttendance({}); setSubsAsOriginal([]); setSubsAsSubstitute([]); return }
+    if (!selectedLesson) { setAttendance({}); setSubsAsOriginal([]); setSubsAsSubstitute([]); setCashState({}); return }
     setLoadingLesson(true)
     setCashState({})
-    const lessonData = lessons.find(l => l.id === selectedLesson)
-    const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : null
     Promise.all([
       supabase.from('attendance').select('*').eq('lesson_id', selectedLesson),
       supabase.from('student_substitutions').select('*').eq('original_lesson_id', selectedLesson),
       supabase.from('student_substitutions').select('*').eq('substitute_lesson_id', selectedLesson),
-      lessonDate
-        ? supabase.from('transactions').select('*').eq('transaction_date', lessonDate).eq('type', 'income').like('description', '現金受取 -%')
-        : Promise.resolve({ data: [] }),
-    ]).then(([{ data: att }, { data: orig }, { data: sub }, { data: txns }]) => {
+    ]).then(([{ data: att }, { data: orig }, { data: sub }]) => {
       const map: Record<string, Attendance> = {}
       for (const a of att ?? []) map[a.student_id] = a
       setAttendance(map)
       setSubsAsOriginal(orig ?? [])
       setSubsAsSubstitute(sub ?? [])
+      setLoadingLesson(false)
+    })
+  }, [selectedLesson])
 
-      // 既存の現金取引を生徒ごとに復元
-      if (txns && txns.length > 0 && lessonData) {
+  // 現金取引の復元（selectedLesson または students/lessons が揃ったタイミングで実行）
+  useEffect(() => {
+    if (!selectedLesson || students.length === 0) return
+    const lessonData = lessons.find(l => l.id === selectedLesson)
+    if (!lessonData) return
+    const lessonDate = lessonData.scheduled_at.slice(0, 10)
+    supabase.from('transactions').select('*')
+      .eq('transaction_date', lessonDate)
+      .eq('type', 'income')
+      .like('description', '現金受取 -%')
+      .then(({ data: txns }) => {
+        if (!txns || txns.length === 0) return
         const newCashState: Record<string, CashEntry> = {}
         for (const student of students) {
           const prefix = `現金受取 - ${student.name}（`
@@ -123,11 +131,8 @@ export default function AttendancePage() {
           }
         }
         setCashState(newCashState)
-      }
-
-      setLoadingLesson(false)
-    })
-  }, [selectedLesson])
+      })
+  }, [selectedLesson, students, lessons])
 
   const currentIndex = useMemo(() => lessons.findIndex(l => l.id === selectedLesson), [lessons, selectedLesson])
 
