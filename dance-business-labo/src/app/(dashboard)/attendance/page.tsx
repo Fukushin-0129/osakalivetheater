@@ -686,16 +686,17 @@ export default function AttendancePage() {
                     <input type="number" min="0" value={item.amount}
                       onChange={e => setEditCashItems(prev => prev.map((it, i) => i === idx ? { ...it, amount: e.target.value } : it))}
                       className="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                    {editCashItems.length > 1 && (
-                      <button onClick={() => setEditCashItems(prev => prev.filter((_, i) => i !== idx))}
-                        className="text-gray-300 hover:text-red-400 p-0.5"><Trash2 size={14} /></button>
-                    )}
+                    <button onClick={() => setEditCashItems(prev => prev.filter((_, i) => i !== idx))}
+                      className="text-gray-300 hover:text-red-400 p-0.5"><Trash2 size={14} /></button>
                   </div>
                 ))}
                 <button onClick={() => setEditCashItems(prev => [...prev, { category: 'レッスン収入', amount: '' }])}
                   className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 px-2 py-1 rounded border border-indigo-200 hover:bg-indigo-50 mt-1">
                   <Plus size={12} /> 費目を追加
                 </button>
+                {editCashItems.length === 0 && (
+                  <p className="text-xs text-red-400 mt-1">全件削除されます。「更新する」で確定します。</p>
+                )}
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
                 <button onClick={() => setEditCashKey(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
