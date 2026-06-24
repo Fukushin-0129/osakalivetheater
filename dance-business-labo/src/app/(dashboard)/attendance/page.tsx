@@ -25,6 +25,9 @@ type StudentSub = {
 
 const CASH_CATEGORIES = ['レッスン収入', '体験レッスン収入', '出演収入', '入会金', '発表会参加費', 'グッズ販売', 'その他']
 
+type CashItem = { category: string; amount: string }
+type CashEntry = { open: boolean; items: CashItem[]; saving: boolean; savedItems: { category: string; amount: number }[] }
+
 function parseJST(s: string): Date {
   const clean = s.slice(0, 16).replace(' ', 'T')
   const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
@@ -44,8 +47,6 @@ export default function AttendancePage() {
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
 
-  type CashItem = { category: string; amount: string }
-  type CashEntry = { open: boolean; items: CashItem[]; saving: boolean; savedItems: { category: string; amount: number }[] }
   // 現金入力状態（複数費目対応）
   const [cashState, setCashState] = useState<Record<string, CashEntry>>({})
 
@@ -90,16 +91,40 @@ export default function AttendancePage() {
     if (!selectedLesson) { setAttendance({}); setSubsAsOriginal([]); setSubsAsSubstitute([]); return }
     setLoadingLesson(true)
     setCashState({})
+    const lessonData = lessons.find(l => l.id === selectedLesson)
+    const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : null
     Promise.all([
       supabase.from('attendance').select('*').eq('lesson_id', selectedLesson),
       supabase.from('student_substitutions').select('*').eq('original_lesson_id', selectedLesson),
       supabase.from('student_substitutions').select('*').eq('substitute_lesson_id', selectedLesson),
-    ]).then(([{ data: att }, { data: orig }, { data: sub }]) => {
+      lessonDate
+        ? supabase.from('transactions').select('*').eq('transaction_date', lessonDate).eq('type', 'income').like('description', '現金受取 -%')
+        : Promise.resolve({ data: [] }),
+    ]).then(([{ data: att }, { data: orig }, { data: sub }, { data: txns }]) => {
       const map: Record<string, Attendance> = {}
       for (const a of att ?? []) map[a.student_id] = a
       setAttendance(map)
       setSubsAsOriginal(orig ?? [])
       setSubsAsSubstitute(sub ?? [])
+
+      // 既存の現金取引を生徒ごとに復元
+      if (txns && txns.length > 0 && lessonData) {
+        const newCashState: Record<string, CashEntry> = {}
+        for (const student of students) {
+          const prefix = `現金受取 - ${student.name}（`
+          const studentTxns = txns.filter((t: { description?: string }) => t.description?.startsWith(prefix))
+          if (studentTxns.length > 0) {
+            newCashState[student.id] = {
+              open: false,
+              items: [{ category: 'レッスン収入', amount: '' }],
+              saving: false,
+              savedItems: studentTxns.map((t: { category: string; amount: number }) => ({ category: t.category, amount: t.amount })),
+            }
+          }
+        }
+        setCashState(newCashState)
+      }
+
       setLoadingLesson(false)
     })
   }, [selectedLesson])
