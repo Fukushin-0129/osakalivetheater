@@ -568,16 +568,16 @@ export default function AttendancePage() {
                           ) : (
                             <div className="flex flex-col gap-1">
                               {savedItems.length > 0 && (
-                                <div className="flex flex-wrap gap-1 items-center">
+                                <div className="flex flex-col gap-0.5">
                                   {savedItems.map((item, idx) => (
-                                    <div key={idx} className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                                    <div key={idx} className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full w-fit">
                                       <Check size={10} />
                                       <span>{item.category} ¥{item.amount.toLocaleString()}</span>
                                     </div>
                                   ))}
                                   <button onClick={() => openEditCash(selectedLesson, s.id)}
-                                    className="p-0.5 text-gray-400 hover:text-indigo-500 transition-colors" title="修正">
-                                    <Pencil size={11} />
+                                    className="text-xs text-indigo-500 hover:text-indigo-700 underline text-left w-fit mt-0.5">
+                                    修正する
                                   </button>
                                 </div>
                               )}
