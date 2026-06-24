@@ -70,7 +70,43 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
       }
     }
     setCurriculumTree(roots)
-    setPlanItems((planData ?? []) as LessonPlanItem[])
+
+    let resolvedPlanItems = (planData ?? []) as LessonPlanItem[]
+
+    // 計画が空なら前回同タイトルのレッスンからコピー
+    if (resolvedPlanItems.length === 0 && lessonData) {
+      const { data: prevLesson } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('title', (lessonData as any).title)
+        .lt('scheduled_at', (lessonData as any).scheduled_at)
+        .order('scheduled_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (prevLesson) {
+        const { data: prevPlan } = await supabase
+          .from('lesson_plan_items')
+          .select('curriculum_item_id, plan_notes, display_order')
+          .eq('lesson_id', prevLesson.id)
+        if (prevPlan && prevPlan.length > 0) {
+          const rows = prevPlan.map((p, i) => ({
+            lesson_id: lessonId,
+            curriculum_item_id: p.curriculum_item_id,
+            plan_notes: p.plan_notes,
+            display_order: p.display_order ?? i,
+          }))
+          await supabase.from('lesson_plan_items').insert(rows)
+          const { data: newPlan } = await supabase
+            .from('lesson_plan_items')
+            .select('*, curriculum_items(*)')
+            .eq('lesson_id', lessonId)
+          resolvedPlanItems = (newPlan ?? []) as LessonPlanItem[]
+        }
+      }
+    }
+
+    setPlanItems(resolvedPlanItems)
     setAttendingStudents((attendData ?? []) as any)
 
     // Build evalMap
@@ -90,7 +126,14 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     if (planItemIds.has(item.id)) {
       await supabase.from('lesson_plan_items').delete().eq('lesson_id', lessonId).eq('curriculum_item_id', item.id)
     } else {
-      await supabase.from('lesson_plan_items').insert({ lesson_id: lessonId, curriculum_item_id: item.id, display_order: planItems.length })
+      const inserts: { lesson_id: string; curriculum_item_id: string; display_order: number }[] = [
+        { lesson_id: lessonId, curriculum_item_id: item.id, display_order: planItems.length },
+      ]
+      // 小項目（level=3）の場合、親の中項目も未チェックなら自動追加
+      if (item.level === 3 && item.parent_id && !planItemIds.has(item.parent_id)) {
+        inserts.unshift({ lesson_id: lessonId, curriculum_item_id: item.parent_id, display_order: planItems.length - 1 })
+      }
+      await supabase.from('lesson_plan_items').insert(inserts)
     }
     const { data } = await supabase.from('lesson_plan_items').select('*, curriculum_items(*)').eq('lesson_id', lessonId)
     setPlanItems((data ?? []) as LessonPlanItem[])
