@@ -388,7 +388,18 @@ export default function AttendancePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {students.map(s => {
+                  {[...students].sort((a, b) => {
+                    const statusOrder = (id: string) => {
+                      const status = attendance[id]?.status
+                      if (status === 'present') return 0
+                      if (status === 'late') return 1
+                      if (status === 'substituted') return 2
+                      if (status === 'absent') return 3
+                      if (status === 'cancelled') return 4
+                      return 5 // unmarked
+                    }
+                    return statusOrder(a.id) - statusOrder(b.id)
+                  }).map(s => {
                     const a = attendance[s.id]
                     const isSaving = savingId === s.id
                     const cs = cashState[s.id]
