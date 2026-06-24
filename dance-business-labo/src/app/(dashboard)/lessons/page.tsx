@@ -774,24 +774,30 @@ export default function LessonsPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">振替先の時間 *</label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {['19:00', '20:15'].map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setSubForm(f => ({ ...f, substitute_time: t }))}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${subForm.substitute_time === t ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                    >{t}</button>
+                  ))}
                   <button
                     type="button"
-                    onClick={() => setSubForm(f => ({ ...f, substitute_time: '19:00' }))}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${subForm.substitute_time === '19:00' ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                  >19:00</button>
-                  <button
-                    type="button"
-                    onClick={() => setSubForm(f => ({ ...f, substitute_time: '20:15' }))}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${subForm.substitute_time === '20:15' ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-                  >20:15</button>
-                  <input
-                    type="text"
-                    placeholder="HH:MM"
-                    value={subForm.substitute_time}
-                    onChange={e => setSubForm(f => ({ ...f, substitute_time: e.target.value }))}
-                    className={`${inputCls} flex-1`}
-                  />
+                    onClick={() => setSubForm(f => ({ ...f, substitute_time: ['19:00','20:15'].includes(f.substitute_time) ? '' : f.substitute_time }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${!['19:00','20:15'].includes(subForm.substitute_time) ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  >その他</button>
+                  {!['19:00','20:15'].includes(subForm.substitute_time) && (
+                    <input
+                      type="text"
+                      placeholder="例: 18:30"
+                      value={subForm.substitute_time}
+                      onChange={e => setSubForm(f => ({ ...f, substitute_time: e.target.value }))}
+                      className={`${inputCls} w-28`}
+                      autoFocus
+                    />
+                  )}
                 </div>
               </div>
               <div>
