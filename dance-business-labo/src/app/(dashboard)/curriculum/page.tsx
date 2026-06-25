@@ -360,7 +360,7 @@ export default function CurriculumPage() {
                     )}
 
                     {/* 小項目 */}
-                    {mid.children.map(small => {
+                    {(mid.children ?? []).map(small => {
                       const isSmallGrabbed = grabbedId === small.id
                       const isSmallOver = dragOverId === small.id
                       return (
