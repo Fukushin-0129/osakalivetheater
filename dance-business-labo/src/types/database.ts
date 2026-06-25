@@ -92,6 +92,8 @@ export type CurriculumItem = {
   level: 1 | 2 | 3
   display_order: number
   video_url?: string | null
+  brain_effects?: string | null
+  teaching_notes?: string | null
   created_at: string
   children?: CurriculumItem[]
 }

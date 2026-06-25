@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { CurriculumItem } from '@/types/database'
-import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Check, X, Loader2, GripVertical, BookOpen, Video, ExternalLink } from 'lucide-react'
+import { Plus, Pencil, Trash2, Check, X, Loader2, GripVertical, BookOpen, Video, ExternalLink, Brain, ChevronDown, ChevronRight } from 'lucide-react'
 
 type TreeItem = CurriculumItem & { children: TreeItem[] }
 
@@ -21,14 +21,11 @@ function VideoThumbnail({ url }: { url: string }) {
   if (!ytId) return null
   return (
     <a href={url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 group relative">
-      <img
-        src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-        alt="動画サムネイル"
-        className="w-20 h-14 object-cover rounded-lg border border-gray-200 group-hover:opacity-80 transition-opacity"
-      />
+      <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt="動画サムネイル"
+        className="w-16 h-11 object-cover rounded border border-gray-200 group-hover:opacity-80 transition-opacity" />
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="bg-black/60 rounded-full p-1.5 group-hover:bg-black/80 transition-colors">
-          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M8 5v14l11-7z"/></svg>
+        <div className="bg-black/60 rounded-full p-1 group-hover:bg-black/80 transition-colors">
+          <svg viewBox="0 0 24 24" className="w-3 h-3 fill-white"><path d="M8 5v14l11-7z"/></svg>
         </div>
       </div>
     </a>
@@ -40,18 +37,27 @@ export default function CurriculumPage() {
   const [tree, setTree] = useState<TreeItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  // 名前編集
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // 追加
   const [addingTo, setAddingTo] = useState<{ parentId: string | null; level: number } | null>(null)
   const [newName, setNewName] = useState('')
-  const [saving, setSaving] = useState(false)
-  // 動画URL編集
+
+  // 動画URL
   const [videoEditId, setVideoEditId] = useState<string | null>(null)
   const [videoEditUrl, setVideoEditUrl] = useState('')
 
-  // ドラッグ状態
-  // grabbedId: グリップを掴んでいる行だけ draggable にする（IME干渉防止）
+  // 脳への影響・進め方パネル（中項目のみ）
+  const [brainOpenId, setBrainOpenId] = useState<string | null>(null)
+  const [brainEditId, setBrainEditId] = useState<string | null>(null)
+  const [brainEditEffects, setBrainEditEffects] = useState('')
+  const [brainEditNotes, setBrainEditNotes] = useState('')
+
+  // ドラッグ
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -59,8 +65,6 @@ export default function CurriculumPage() {
   const dragCounter = useRef(0)
 
   useEffect(() => { load() }, [])
-
-  // mouseup でグリップ掴み状態を解除
   useEffect(() => {
     const onMouseUp = () => setGrabbedId(null)
     window.addEventListener('mouseup', onMouseUp)
@@ -70,76 +74,40 @@ export default function CurriculumPage() {
   async function load(silent = false) {
     if (!silent) setLoading(true)
     else setRefreshing(true)
-    const { data, error } = await supabase
-      .from('curriculum_items')
-      .select('*')
-      .order('display_order')
-      .order('created_at')
-    if (error) {
-      console.error('curriculum load error:', error)
-      setLoading(false)
-      setRefreshing(false)
-      return
-    }
+    const { data } = await supabase.from('curriculum_items').select('*').order('display_order').order('created_at')
     const flat: CurriculumItem[] = data ?? []
     const roots: TreeItem[] = flat.filter(i => i.parent_id === null).map(i => ({ ...i, children: [] }))
     for (const root of roots) {
-      root.children = flat
-        .filter(i => i.parent_id === root.id)
-        .map(i => ({
-          ...i,
-          children: flat.filter(j => j.parent_id === i.id).map(j => ({ ...j, children: [] }))
-        }))
+      root.children = flat.filter(i => i.parent_id === root.id).map(i => ({
+        ...i, children: flat.filter(j => j.parent_id === i.id).map(j => ({ ...j, children: [] }))
+      }))
     }
     setTree(roots)
     setLoading(false)
     setRefreshing(false)
   }
 
-  function toggleExpand(id: string) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  function startEdit(item: CurriculumItem) {
-    setEditingId(item.id)
-    setEditName(item.name)
-    setAddingTo(null)
-  }
-
   async function saveEdit(id: string) {
     if (!editName.trim()) { setEditingId(null); return }
     setSaving(true)
-    const { error } = await supabase.from('curriculum_items').update({ name: editName.trim() }).eq('id', id)
+    await supabase.from('curriculum_items').update({ name: editName.trim() }).eq('id', id)
     setSaving(false)
-    if (error) { alert(`更新エラー: ${error.message}`); return }
     setEditingId(null)
     load(true)
   }
 
   async function deleteItem(id: string) {
-    if (!confirm('この項目と配下の項目をすべて削除しますか？\nレッスン計画・評価データも削除されます。')) return
-    const { error } = await supabase.from('curriculum_items').delete().eq('id', id)
-    if (error) { alert(`削除エラー: ${error.message}`); return }
+    if (!confirm('この項目と配下の項目をすべて削除しますか？')) return
+    await supabase.from('curriculum_items').delete().eq('id', id)
     load(true)
   }
 
   async function addItem() {
     const name = newName.trim()
-    const target = addingTo
-    if (!name || !target) return
+    if (!name || !addingTo) return
     setSaving(true)
-    const { error } = await supabase.from('curriculum_items').insert({
-      parent_id: target.parentId,
-      name,
-      level: target.level,
-      display_order: 99,
-    })
+    await supabase.from('curriculum_items').insert({ parent_id: addingTo.parentId, name, level: addingTo.level, display_order: 99 })
     setSaving(false)
-    if (error) { alert(`追加エラー: ${error.message}`); return }
     setAddingTo(null)
     setNewName('')
     load(true)
@@ -153,113 +121,59 @@ export default function CurriculumPage() {
     load(true)
   }
 
-  function openVideoEdit(item: CurriculumItem) {
-    setVideoEditId(item.id)
-    setVideoEditUrl(item.video_url ?? '')
-    setEditingId(null)
+  async function saveBrainEdit(id: string) {
+    setSaving(true)
+    await supabase.from('curriculum_items').update({ brain_effects: brainEditEffects.trim() || null, teaching_notes: brainEditNotes.trim() || null }).eq('id', id)
+    setSaving(false)
+    setBrainEditId(null)
+    load(true)
   }
 
-  function startAdd(parentId: string | null, level: number) {
-    setAddingTo({ parentId, level })
-    setNewName('')
-    setEditingId(null)
+  function openBrainEdit(item: CurriculumItem) {
+    setBrainEditId(item.id)
+    setBrainEditEffects(item.brain_effects ?? '')
+    setBrainEditNotes(item.teaching_notes ?? '')
   }
 
-  // ── ドラッグ＆ドロップ（グリップを掴んだ時だけ draggable になる） ──
+  // ドラッグ＆ドロップ
   function onDragStart(e: React.DragEvent, id: string) {
     setDraggedId(id)
     e.dataTransfer.effectAllowed = 'move'
     setTimeout(() => { (e.target as HTMLElement).style.opacity = '0.4' }, 0)
   }
-
   function onDragEnd(e: React.DragEvent) {
     ;(e.target as HTMLElement).style.opacity = '1'
-    setDraggedId(null)
-    setDragOverId(null)
-    setGrabbedId(null)
-    dragCounter.current = 0
+    setDraggedId(null); setDragOverId(null); setGrabbedId(null); dragCounter.current = 0
   }
-
   function onDragOver(e: React.DragEvent, id: string) {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverId(id)
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId(id)
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     setDragBefore(e.clientY < rect.top + rect.height / 2)
   }
-
-  function onDragLeave() {
-    dragCounter.current--
-    if (dragCounter.current <= 0) {
-      setDragOverId(null)
-      dragCounter.current = 0
-    }
-  }
-
+  function onDragLeave() { dragCounter.current--; if (dragCounter.current <= 0) { setDragOverId(null); dragCounter.current = 0 } }
   function onDragEnter() { dragCounter.current++ }
-
   async function onDrop(e: React.DragEvent, targetId: string, siblings: TreeItem[]) {
     e.preventDefault()
     const fromId = draggedId
-    setDraggedId(null)
-    setDragOverId(null)
-    setGrabbedId(null)
-    dragCounter.current = 0
+    setDraggedId(null); setDragOverId(null); setGrabbedId(null); dragCounter.current = 0
     if (!fromId || fromId === targetId) return
-
     const fromIdx = siblings.findIndex(s => s.id === fromId)
     const toIdx = siblings.findIndex(s => s.id === targetId)
     if (fromIdx === -1 || toIdx === -1) return
-
     const reordered = [...siblings]
     const [moved] = reordered.splice(fromIdx, 1)
     let insertAt = dragBefore ? toIdx : toIdx + 1
     if (fromIdx < toIdx) insertAt--
     reordered.splice(insertAt, 0, moved)
-
-    await Promise.all(
-      reordered.map((item, idx) =>
-        supabase.from('curriculum_items').update({ display_order: idx + 1 }).eq('id', item.id)
-      )
-    )
+    await Promise.all(reordered.map((item, idx) => supabase.from('curriculum_items').update({ display_order: idx + 1 }).eq('id', item.id)))
     load(true)
   }
 
-  // ── 共通の編集インライン ──
-  function EditInput({ id, size = 'md' }: { id: string; size?: 'sm' | 'md' | 'lg' }) {
-    const cls = size === 'lg'
-      ? 'flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500'
-      : size === 'md'
-        ? 'flex-1 border border-indigo-300 rounded-lg px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500'
-        : 'flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500'
-    return (
-      <div className="flex-1 flex items-center gap-2">
-        <input
-          value={editName}
-          onChange={e => setEditName(e.target.value)}
-          onKeyDown={e => {
-            if (e.nativeEvent.isComposing) return
-            if (e.key === 'Enter') saveEdit(id)
-            if (e.key === 'Escape') setEditingId(null)
-          }}
-          className={cls}
-          autoFocus
-        />
-        <button onClick={() => saveEdit(id)} className="text-indigo-600 hover:text-indigo-800 p-1 flex-shrink-0">
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-        </button>
-        <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"><X size={14} /></button>
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
-        <Loader2 size={24} className="animate-spin mr-2" /> 読み込み中...
-      </div>
-    )
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-gray-400">
+      <Loader2 size={24} className="animate-spin mr-2" /> 読み込み中...
+    </div>
+  )
 
   return (
     <div>
@@ -271,234 +185,261 @@ export default function CurriculumPage() {
           </div>
           <p className="text-gray-500 text-sm mt-0.5">ダブルクリックで編集 / グリップをドラッグして並び替え</p>
         </div>
-        <button
-          onClick={() => startAdd(null, 1)}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
-        >
+        <button onClick={() => { setAddingTo({ parentId: null, level: 1 }); setNewName('') }}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors">
           <Plus size={16} /> 大項目を追加
         </button>
       </div>
 
-      {/* 大項目追加フォーム */}
-      {addingTo?.level === 1 && addingTo.parentId === null && (
-        <div className="mb-4 bg-white rounded-xl shadow-sm p-4 flex items-center gap-3 border-2 border-indigo-300">
-          <span className="text-xs font-semibold text-indigo-600 w-12 flex-shrink-0">大項目</span>
-          <input
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
-            placeholder="大項目名を入力"
-            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            autoFocus
-          />
-          <button onClick={addItem} disabled={saving || !newName.trim()} className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} 追加
-          </button>
-          <button onClick={() => setAddingTo(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
-        </div>
-      )}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        {/* 大項目追加フォーム */}
+        {addingTo?.level === 1 && addingTo.parentId === null && (
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-indigo-100 bg-indigo-50">
+            <span className="text-xs font-semibold text-indigo-600 w-10 flex-shrink-0">大項目</span>
+            <input value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
+              placeholder="大項目名を入力" autoFocus
+              className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <button onClick={addItem} disabled={saving || !newName.trim()}
+              className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} 追加
+            </button>
+            <button onClick={() => setAddingTo(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={16} /></button>
+          </div>
+        )}
 
-      <div className="space-y-2">
-        {tree.map(root => {
+        {tree.map((root, rootIdx) => {
           const isGrabbed = grabbedId === root.id
           const isOver = dragOverId === root.id
           return (
-            <div
-              key={root.id}
+            <div key={root.id}
               draggable={isGrabbed}
-              onDragStart={e => onDragStart(e, root.id)}
-              onDragEnd={onDragEnd}
-              onDragOver={e => onDragOver(e, root.id)}
-              onDragEnter={onDragEnter}
-              onDragLeave={onDragLeave}
+              onDragStart={e => onDragStart(e, root.id)} onDragEnd={onDragEnd}
+              onDragOver={e => onDragOver(e, root.id)} onDragEnter={onDragEnter} onDragLeave={onDragLeave}
               onDrop={e => onDrop(e, root.id, tree)}
-              className={`bg-white rounded-xl shadow-sm overflow-hidden transition-all ${
-                isOver ? (dragBefore ? 'border-t-2 border-indigo-500' : 'border-b-2 border-indigo-500') : 'border-2 border-transparent'
-              } ${draggedId === root.id ? 'opacity-40' : ''}`}
-            >
-              {/* 大項目ヘッダー */}
-              <div className="flex items-center gap-2 px-3 py-3.5 bg-indigo-50 border-b border-indigo-100">
-                <span
-                  className="cursor-grab active:cursor-grabbing text-indigo-300 hover:text-indigo-500 flex-shrink-0 touch-none"
-                  onMouseDown={() => setGrabbedId(root.id)}
-                >
-                  <GripVertical size={16} />
-                </span>
-                <button
-                  onClick={() => toggleExpand(root.id)}
-                  className="text-indigo-500 hover:text-indigo-700 flex-shrink-0"
-                >
-                  {expanded.has(root.id) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                </button>
+              className={`border-b border-gray-100 last:border-0 ${isOver ? (dragBefore ? 'border-t-2 border-indigo-500' : 'border-b-2 border-indigo-500') : ''} ${draggedId === root.id ? 'opacity-40' : ''}`}>
+
+              {/* 大項目行 */}
+              <div className="flex items-center gap-1 px-3 py-2.5 bg-indigo-50/80">
+                <span className="cursor-grab active:cursor-grabbing text-indigo-300 hover:text-indigo-500 flex-shrink-0 touch-none"
+                  onMouseDown={() => setGrabbedId(root.id)}><GripVertical size={14} /></span>
                 {editingId === root.id ? (
-                  <EditInput id={root.id} size="lg" />
+                  <div className="flex-1 flex items-center gap-2">
+                    <input value={editName} onChange={e => setEditName(e.target.value)}
+                      onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') saveEdit(root.id); if (e.key === 'Escape') setEditingId(null) }}
+                      className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+                    <button onClick={() => saveEdit(root.id)} className="text-indigo-600 hover:text-indigo-800 p-1">
+                      {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    </button>
+                    <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={13} /></button>
+                  </div>
                 ) : (
                   <>
-                    <span
-                      className="flex-1 font-semibold text-indigo-800 cursor-pointer select-none"
-                      onDoubleClick={() => startEdit(root)}
-                      title="ダブルクリックで編集"
-                    >
-                      {root.name}
-                    </span>
+                    <span className="flex-1 font-semibold text-indigo-800 text-sm cursor-pointer select-none"
+                      onDoubleClick={() => { setEditingId(root.id); setEditName(root.name) }}
+                      title="ダブルクリックで編集">{root.name}</span>
                     {root.video_url && <VideoThumbnail url={root.video_url} />}
-                    <span className="text-xs text-indigo-400 mr-1">{root.children.length}項目</span>
-                    {root.video_url && <a href={root.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-100 transition-colors" title="動画を開く"><ExternalLink size={13} /></a>}
-                    <button onClick={() => openVideoEdit(root)} className={`p-1 rounded hover:bg-indigo-100 transition-colors ${root.video_url ? 'text-indigo-500' : 'text-indigo-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={13} /></button>
-                    <button onClick={() => startEdit(root)} className="text-indigo-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-100 transition-colors"><Pencil size={13} /></button>
-                    <button onClick={() => deleteItem(root.id)} className="text-indigo-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={13} /></button>
+                    {root.video_url && <a href={root.video_url} target="_blank" rel="noopener noreferrer"
+                      className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-100" title="動画を開く"><ExternalLink size={12} /></a>}
+                    <button onClick={() => { setVideoEditId(root.id); setVideoEditUrl(root.video_url ?? '') }}
+                      className={`p-1 rounded hover:bg-indigo-100 transition-colors ${root.video_url ? 'text-indigo-500' : 'text-indigo-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={12} /></button>
+                    <button onClick={() => { setEditingId(root.id); setEditName(root.name) }}
+                      className="text-indigo-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-100"><Pencil size={12} /></button>
+                    <button onClick={() => deleteItem(root.id)}
+                      className="text-indigo-200 hover:text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={12} /></button>
                   </>
                 )}
               </div>
 
-              {/* 中項目 */}
-              {expanded.has(root.id) && (
-                <div>
-                  {root.children.map(mid => {
-                    const isMidGrabbed = grabbedId === mid.id
-                    const isMidOver = dragOverId === mid.id
-                    return (
-                      <div key={mid.id}>
-                        <div
-                          draggable={isMidGrabbed}
-                          onDragStart={e => { e.stopPropagation(); onDragStart(e, mid.id) }}
-                          onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
-                          onDragOver={e => { e.stopPropagation(); onDragOver(e, mid.id) }}
-                          onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
-                          onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
-                          onDrop={e => { e.stopPropagation(); onDrop(e, mid.id, root.children) }}
-                          className={`flex items-center gap-2 pl-6 pr-4 py-2.5 bg-gray-50 border-b border-gray-100 transition-all ${
-                            isMidOver ? (dragBefore ? 'border-t-2 border-indigo-400' : 'border-b-2 border-indigo-400') : ''
-                          } ${draggedId === mid.id ? 'opacity-40' : ''}`}
-                        >
-                          <span
-                            className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0"
-                            onMouseDown={() => setGrabbedId(mid.id)}
-                          >
-                            <GripVertical size={14} />
-                          </span>
-                          <button onClick={() => toggleExpand(mid.id)} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
-                            {expanded.has(mid.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </button>
-                          {editingId === mid.id ? (
-                            <EditInput id={mid.id} size="md" />
-                          ) : (
-                            <>
-                              <span
-                                className="flex-1 text-sm font-medium text-gray-700 cursor-pointer select-none"
-                                onDoubleClick={() => startEdit(mid)}
-                                title="ダブルクリックで編集"
-                              >
-                                {mid.name}
-                              </span>
-                              {mid.video_url && <VideoThumbnail url={mid.video_url} />}
-                              <span className="text-xs text-gray-400 mr-1">{(mid.children ?? []).length}項目</span>
-                              {mid.video_url && <a href={mid.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors" title="動画を開く"><ExternalLink size={12} /></a>}
-                              <button onClick={() => openVideoEdit(mid)} className={`p-1 rounded hover:bg-indigo-50 transition-colors ${mid.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={12} /></button>
-                              <button onClick={() => startEdit(mid)} className="text-gray-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"><Pencil size={12} /></button>
-                              <button onClick={() => deleteItem(mid.id)} className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={12} /></button>
-                            </>
-                          )}
-                        </div>
+              {/* 中項目・小項目（常時表示） */}
+              {root.children.map(mid => {
+                const isMidGrabbed = grabbedId === mid.id
+                const isMidOver = dragOverId === mid.id
+                const brainOpen = brainOpenId === mid.id
+                const brainEditing = brainEditId === mid.id
+                const hasBrain = !!(mid.brain_effects || mid.teaching_notes)
+                return (
+                  <div key={mid.id}
+                    draggable={isMidGrabbed}
+                    onDragStart={e => { e.stopPropagation(); onDragStart(e, mid.id) }}
+                    onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
+                    onDragOver={e => { e.stopPropagation(); onDragOver(e, mid.id) }}
+                    onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
+                    onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
+                    onDrop={e => { e.stopPropagation(); onDrop(e, mid.id, root.children) }}
+                    className={`${isMidOver ? (dragBefore ? 'border-t-2 border-indigo-400' : 'border-b-2 border-indigo-400') : ''} ${draggedId === mid.id ? 'opacity-40' : ''}`}>
 
-                        {/* 小項目 */}
-                        {expanded.has(mid.id) && (
-                          <div>
-                            {(mid.children ?? []).map(small => {
-                              const isSmallGrabbed = grabbedId === small.id
-                              const isSmallOver = dragOverId === small.id
-                              return (
-                                <div
-                                  key={small.id}
-                                  draggable={isSmallGrabbed}
-                                  onDragStart={e => { e.stopPropagation(); onDragStart(e, small.id) }}
-                                  onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
-                                  onDragOver={e => { e.stopPropagation(); onDragOver(e, small.id) }}
-                                  onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
-                                  onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
-                                  onDrop={e => { e.stopPropagation(); onDrop(e, small.id, (mid.children ?? []) as TreeItem[]) }}
-                                  className={`flex items-center gap-2 pl-14 pr-4 py-2 border-b border-gray-50 hover:bg-gray-50 transition-all ${
-                                    isSmallOver ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''
-                                  } ${draggedId === small.id ? 'opacity-40' : ''}`}
-                                >
-                                  <span
-                                    className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0"
-                                    onMouseDown={() => setGrabbedId(small.id)}
-                                  >
-                                    <GripVertical size={13} />
-                                  </span>
-                                  {editingId === small.id ? (
-                                    <EditInput id={small.id} size="sm" />
-                                  ) : (
-                                    <>
-                                      <span
-                                        className="flex-1 text-sm text-gray-600 cursor-pointer select-none"
-                                        onDoubleClick={() => startEdit(small)}
-                                        title="ダブルクリックで編集"
-                                      >
-                                        {small.name}
-                                      </span>
-                                      {small.video_url && <VideoThumbnail url={small.video_url} />}
-                                      {small.video_url && <a href={small.video_url} target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors" title="動画を開く"><ExternalLink size={11} /></a>}
-                                      <button onClick={() => openVideoEdit(small)} className={`p-1 rounded hover:bg-indigo-50 transition-colors ${small.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={11} /></button>
-                                      <button onClick={() => startEdit(small)} className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"><Pencil size={11} /></button>
-                                      <button onClick={() => deleteItem(small.id)} className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"><Trash2 size={11} /></button>
-                                    </>
-                                  )}
-                                </div>
-                              )
-                            })}
-                            {/* 小項目追加 */}
-                            {addingTo?.parentId === mid.id && addingTo.level === 3 ? (
-                              <div className="flex items-center gap-2 pl-14 pr-4 py-2 border-b border-gray-50 bg-indigo-50/50">
-                                <input
-                                  value={newName}
-                                  onChange={e => setNewName(e.target.value)}
-                                  onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
-                                  placeholder="小項目名を入力"
-                                  className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                  autoFocus
-                                />
-                                <button onClick={addItem} disabled={saving} className="text-indigo-600 p-1"><Check size={13} /></button>
-                                <button onClick={() => setAddingTo(null)} className="text-gray-400 p-1"><X size={13} /></button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => startAdd(mid.id, 3)}
-                                className="flex items-center gap-1.5 pl-14 pr-4 py-2 text-xs text-gray-400 hover:text-indigo-600 transition-colors w-full"
-                              >
-                                <Plus size={11} /> 小項目を追加
+                    {/* 中項目行 */}
+                    <div className="flex items-center gap-1 pl-6 pr-3 py-2 border-b border-gray-50 bg-gray-50/40 hover:bg-gray-50 transition-colors">
+                      <span className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0"
+                        onMouseDown={() => setGrabbedId(mid.id)}><GripVertical size={13} /></span>
+                      {editingId === mid.id ? (
+                        <div className="flex-1 flex items-center gap-2">
+                          <input value={editName} onChange={e => setEditName(e.target.value)}
+                            onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') saveEdit(mid.id); if (e.key === 'Escape') setEditingId(null) }}
+                            className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+                          <button onClick={() => saveEdit(mid.id)} className="text-indigo-600 hover:text-indigo-800 p-1">
+                            {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                          </button>
+                          <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={13} /></button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="flex-1 text-sm font-medium text-gray-700 cursor-pointer select-none"
+                            onDoubleClick={() => { setEditingId(mid.id); setEditName(mid.name) }}
+                            title="ダブルクリックで編集">{mid.name}</span>
+                          {mid.video_url && <VideoThumbnail url={mid.video_url} />}
+                          {mid.video_url && <a href={mid.video_url} target="_blank" rel="noopener noreferrer"
+                            className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50" title="動画を開く"><ExternalLink size={11} /></a>}
+                          {/* 脳への影響ボタン */}
+                          <button
+                            onClick={() => setBrainOpenId(brainOpen ? null : mid.id)}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${brainOpen ? 'bg-emerald-100 text-emerald-700' : hasBrain ? 'text-emerald-500 hover:bg-emerald-50' : 'text-gray-200 hover:text-emerald-400 hover:bg-emerald-50'}`}
+                            title="脳への影響・進め方">
+                            <Brain size={11} />
+                            {brainOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                          </button>
+                          <button onClick={() => { setVideoEditId(mid.id); setVideoEditUrl(mid.video_url ?? '') }}
+                            className={`p-1 rounded hover:bg-indigo-50 transition-colors ${mid.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`} title="動画リンク"><Video size={11} /></button>
+                          <button onClick={() => { setEditingId(mid.id); setEditName(mid.name) }}
+                            className="text-gray-300 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50"><Pencil size={11} /></button>
+                          <button onClick={() => deleteItem(mid.id)}
+                            className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={11} /></button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* 脳への影響パネル */}
+                    {brainOpen && (
+                      <div className="pl-10 pr-4 py-3 border-b border-emerald-100 bg-emerald-50/40">
+                        {brainEditing ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="block text-xs font-semibold text-emerald-700 mb-1">脳への影響</label>
+                              <textarea value={brainEditEffects} onChange={e => setBrainEditEffects(e.target.value)} rows={4}
+                                className="w-full border border-emerald-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-emerald-700 mb-1">進め方の提案</label>
+                              <textarea value={brainEditNotes} onChange={e => setBrainEditNotes(e.target.value)} rows={4}
+                                className="w-full border border-emerald-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setBrainEditId(null)} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50">キャンセル</button>
+                              <button onClick={() => saveBrainEdit(mid.id)} disabled={saving}
+                                className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                                {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} 保存
                               </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {mid.brain_effects ? (
+                              <>
+                                <div>
+                                  <p className="text-xs font-semibold text-emerald-700 mb-0.5">脳への影響</p>
+                                  <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{mid.brain_effects}</p>
+                                </div>
+                                {mid.teaching_notes && (
+                                  <div>
+                                    <p className="text-xs font-semibold text-emerald-700 mb-0.5">進め方の提案</p>
+                                    <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{mid.teaching_notes}</p>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-xs text-gray-400 italic">まだ記入されていません</p>
                             )}
+                            <button onClick={() => openBrainEdit(mid)}
+                              className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 underline mt-1">
+                              <Pencil size={10} /> 編集する
+                            </button>
                           </div>
                         )}
                       </div>
-                    )
-                  })}
+                    )}
 
-                  {/* 中項目追加 */}
-                  {addingTo?.parentId === root.id && addingTo.level === 2 ? (
-                    <div className="flex items-center gap-2 pl-6 pr-4 py-3 border-b border-gray-100 bg-indigo-50/50">
-                      <input
-                        value={newName}
-                        onChange={e => setNewName(e.target.value)}
-                        onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
-                        placeholder="中項目名を入力"
-                        className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        autoFocus
-                      />
-                      <button onClick={addItem} disabled={saving} className="text-indigo-600 p-1"><Check size={14} /></button>
-                      <button onClick={() => setAddingTo(null)} className="text-gray-400 p-1"><X size={14} /></button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => startAdd(root.id, 2)}
-                      className="flex items-center gap-1.5 pl-6 pr-4 py-3 text-xs text-gray-400 hover:text-indigo-600 transition-colors w-full"
-                    >
-                      <Plus size={12} /> 中項目を追加
-                    </button>
-                  )}
+                    {/* 小項目 */}
+                    {mid.children.map(small => {
+                      const isSmallGrabbed = grabbedId === small.id
+                      const isSmallOver = dragOverId === small.id
+                      return (
+                        <div key={small.id}
+                          draggable={isSmallGrabbed}
+                          onDragStart={e => { e.stopPropagation(); onDragStart(e, small.id) }}
+                          onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
+                          onDragOver={e => { e.stopPropagation(); onDragOver(e, small.id) }}
+                          onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
+                          onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
+                          onDrop={e => { e.stopPropagation(); onDrop(e, small.id, mid.children as TreeItem[]) }}
+                          className={`flex items-center gap-1 pl-12 pr-3 py-1.5 border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${isSmallOver ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''} ${draggedId === small.id ? 'opacity-40' : ''}`}>
+                          <span className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0"
+                            onMouseDown={() => setGrabbedId(small.id)}><GripVertical size={12} /></span>
+                          {editingId === small.id ? (
+                            <div className="flex-1 flex items-center gap-2">
+                              <input value={editName} onChange={e => setEditName(e.target.value)}
+                                onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') saveEdit(small.id); if (e.key === 'Escape') setEditingId(null) }}
+                                className="flex-1 border border-indigo-300 rounded-lg px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+                              <button onClick={() => saveEdit(small.id)} className="text-indigo-600 p-1">
+                                {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                              </button>
+                              <button onClick={() => setEditingId(null)} className="text-gray-400 p-1"><X size={12} /></button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="flex-1 text-sm text-gray-600 cursor-pointer select-none"
+                                onDoubleClick={() => { setEditingId(small.id); setEditName(small.name) }}
+                                title="ダブルクリックで編集">{small.name}</span>
+                              {small.video_url && <VideoThumbnail url={small.video_url} />}
+                              {small.video_url && <a href={small.video_url} target="_blank" rel="noopener noreferrer"
+                                className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50"><ExternalLink size={10} /></a>}
+                              <button onClick={() => { setVideoEditId(small.id); setVideoEditUrl(small.video_url ?? '') }}
+                                className={`p-1 rounded hover:bg-indigo-50 ${small.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`}><Video size={10} /></button>
+                              <button onClick={() => { setEditingId(small.id); setEditName(small.name) }}
+                                className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50"><Pencil size={10} /></button>
+                              <button onClick={() => deleteItem(small.id)}
+                                className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={10} /></button>
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {/* 小項目追加 */}
+                    {addingTo?.parentId === mid.id && addingTo.level === 3 ? (
+                      <div className="flex items-center gap-2 pl-12 pr-3 py-2 border-b border-gray-50 bg-indigo-50/40">
+                        <input value={newName} onChange={e => setNewName(e.target.value)}
+                          onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
+                          placeholder="小項目名を入力" autoFocus
+                          className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        <button onClick={addItem} disabled={saving} className="text-indigo-600 p-1"><Check size={12} /></button>
+                        <button onClick={() => setAddingTo(null)} className="text-gray-400 p-1"><X size={12} /></button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setAddingTo({ parentId: mid.id, level: 3 }); setNewName('') }}
+                        className="flex items-center gap-1 pl-12 pr-3 py-1.5 text-xs text-gray-300 hover:text-indigo-500 transition-colors w-full border-b border-gray-50">
+                        <Plus size={10} /> 小項目を追加
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+
+              {/* 中項目追加 */}
+              {addingTo?.parentId === root.id && addingTo.level === 2 ? (
+                <div className="flex items-center gap-2 pl-6 pr-3 py-2.5 border-b border-gray-100 bg-indigo-50/40">
+                  <input value={newName} onChange={e => setNewName(e.target.value)}
+                    onKeyDown={e => { if (!e.nativeEvent.isComposing && e.key === 'Enter') addItem() }}
+                    placeholder="中項目名を入力" autoFocus
+                    className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <button onClick={addItem} disabled={saving} className="text-indigo-600 p-1"><Check size={13} /></button>
+                  <button onClick={() => setAddingTo(null)} className="text-gray-400 p-1"><X size={13} /></button>
                 </div>
+              ) : (
+                <button onClick={() => { setAddingTo({ parentId: root.id, level: 2 }); setNewName('') }}
+                  className="flex items-center gap-1 pl-6 pr-3 py-2 text-xs text-gray-300 hover:text-indigo-500 transition-colors w-full border-b border-gray-50">
+                  <Plus size={11} /> 中項目を追加
+                </button>
               )}
             </div>
           )
@@ -514,47 +455,26 @@ export default function CurriculumPage() {
               <button onClick={() => setVideoEditId(null)} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>
             </div>
             <div className="px-6 py-4 space-y-3">
-              <label className="block text-xs font-medium text-gray-600 mb-1">YouTube / 動画URL</label>
-              <input
-                type="url"
-                value={videoEditUrl}
-                onChange={e => setVideoEditUrl(e.target.value)}
+              <input type="url" value={videoEditUrl} onChange={e => setVideoEditUrl(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') saveVideoUrl(videoEditId) }}
-                placeholder="https://www.youtube.com/watch?v=..."
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                autoFocus
-              />
-              {videoEditUrl && (
-                <a href={videoEditUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-indigo-500 hover:underline">
-                  <ExternalLink size={11} /> プレビュー（新しいタブで開く）
-                </a>
-              )}
+                placeholder="https://www.youtube.com/watch?v=..." autoFocus
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               <p className="text-xs text-gray-400">空欄にして保存するとリンクを削除します</p>
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
               <button onClick={() => setVideoEditId(null)} className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm hover:bg-gray-50">キャンセル</button>
               <button onClick={() => saveVideoUrl(videoEditId)} disabled={saving}
                 className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white py-2.5 rounded-xl text-sm font-medium">
-                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                保存
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} 保存
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 使い方の説明 */}
-      <div className="mt-8 bg-indigo-50 rounded-xl p-5 text-sm text-indigo-700">
-        <div className="flex items-center gap-2 mb-2 font-semibold">
-          <BookOpen size={16} /> レッスンへの計画の設定方法
-        </div>
-        <ol className="space-y-1 text-indigo-600 list-decimal list-inside text-xs leading-relaxed">
-          <li>「レッスン」ページでレッスン一覧を表示</li>
-          <li>各レッスン行の「計画・評価」ボタンをクリック</li>
-          <li>「計画」タブでこのカリキュラムの項目を選択・メモを記入</li>
-          <li>レッスン後に「評価」タブで生徒ごとに評価（⭐ + メモ）</li>
-          <li>「評価を保存・カルテに書き込む」で自動的に各生徒のカルテに記録</li>
-        </ol>
+      <div className="mt-6 bg-indigo-50 rounded-xl p-4 text-xs text-indigo-600 flex items-start gap-2">
+        <BookOpen size={14} className="mt-0.5 flex-shrink-0" />
+        <span>「レッスン」ページの各レッスン行から「計画・評価」を開いて、カリキュラム項目を選択・評価できます。中項目の <Brain size={11} className="inline" /> ボタンで脳への影響と進め方を確認・編集できます。</span>
       </div>
     </div>
   )
