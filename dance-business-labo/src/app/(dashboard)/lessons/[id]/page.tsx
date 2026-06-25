@@ -423,40 +423,61 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
                       <span className="font-semibold text-gray-800 text-sm">{student.name}</span>
                       {student.name_kana && <span className="text-xs text-gray-400 ml-2">{student.name_kana}</span>}
                     </div>
-                    <div className="divide-y divide-gray-50">
-                      {planItems.map(pi => {
-                        const item = pi.curriculum_items as CurriculumItem | null
-                        if (!item) return null
-                        const val = evalMap[att.student_id]?.[item.id]
-                        const parent = item.parent_id
-                          ? curriculumTree.flatMap(r => [...(r.children ?? []), ...(r.children?.flatMap(c => c.children ?? []) ?? [])]).find(c => c.id === item.parent_id)
-                          : null
+                    <div>
+                      {curriculumTree.map(root => {
+                        const allDescendants = [
+                          ...(root.children ?? []),
+                          ...(root.children ?? []).flatMap(c => c.children ?? []),
+                        ]
+                        const rootHasPlan = planItemIds.has(root.id) || allDescendants.some(c => planItemIds.has(c.id))
+                        if (!rootHasPlan) return null
                         return (
-                          <div key={pi.id} className="px-4 py-3">
-                            <div className="flex items-start gap-3 mb-1.5">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs text-gray-400">{parent?.name ?? item.name}</p>
-                                {parent && <p className="text-sm font-medium text-gray-700">{item.name}</p>}
-                                {pi.plan_notes && (
-                                  <p className="text-xs text-indigo-400 mt-0.5">計画: {pi.plan_notes}</p>
-                                )}
-                              </div>
-                              <div className="flex gap-0.5 flex-shrink-0">
-                                {[1, 2, 3, 4, 5].map(s => (
-                                  <button key={s}
-                                    onClick={() => setEval(att.student_id, item.id, 'rating', s === (val?.rating ?? 0) ? 0 : s)}
-                                    className={`transition-colors ${s <= (val?.rating ?? 0) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}>
-                                    <Star size={18} fill={s <= (val?.rating ?? 0) ? 'currentColor' : 'none'} />
-                                  </button>
-                                ))}
-                              </div>
+                          <div key={root.id} className="border-b border-gray-100 last:border-0">
+                            <div className="px-4 py-2 bg-indigo-50/60">
+                              <span className="text-xs font-bold text-indigo-700">{root.name}</span>
                             </div>
-                            <textarea
-                              value={val?.notes ?? ''}
-                              onChange={e => setEval(att.student_id, item.id, 'notes', e.target.value)}
-                              placeholder="メモ（生徒と共有されます）"
-                              rows={2}
-                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                            {(root.children ?? []).map(mid => {
+                              const midChildren = mid.children ?? []
+                              const midHasPlan = planItemIds.has(mid.id) || midChildren.some(c => planItemIds.has(c.id))
+                              if (!midHasPlan) return null
+                              const smallPlanned = midChildren.filter(s => planItemIds.has(s.id))
+                              return (
+                                <div key={mid.id}>
+                                  <div className="px-4 py-2 bg-gray-50/50 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-gray-600">{mid.name}</span>
+                                  </div>
+                                  {smallPlanned.map(small => {
+                                    const pi = planItems.find(p => p.curriculum_item_id === small.id)
+                                    const val = evalMap[att.student_id]?.[small.id]
+                                    return (
+                                      <div key={small.id} className="px-4 py-3 border-t border-gray-50">
+                                        <div className="flex items-center gap-3 mb-1.5">
+                                          <span className="flex-1 text-sm text-gray-700">{small.name}</span>
+                                          <div className="flex gap-0.5 flex-shrink-0">
+                                            {[1, 2, 3, 4, 5].map(s => (
+                                              <button key={s}
+                                                onClick={() => setEval(att.student_id, small.id, 'rating', s === (val?.rating ?? 0) ? 0 : s)}
+                                                className={`transition-colors ${s <= (val?.rating ?? 0) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}>
+                                                <Star size={18} fill={s <= (val?.rating ?? 0) ? 'currentColor' : 'none'} />
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        {pi?.plan_notes && (
+                                          <p className="text-xs text-indigo-400 mb-1">計画: {pi.plan_notes}</p>
+                                        )}
+                                        <textarea
+                                          value={val?.notes ?? ''}
+                                          onChange={e => setEval(att.student_id, small.id, 'notes', e.target.value)}
+                                          placeholder="メモ（生徒と共有されます）"
+                                          rows={2}
+                                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })}
                           </div>
                         )
                       })}
