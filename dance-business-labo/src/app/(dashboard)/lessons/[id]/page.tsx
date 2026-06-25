@@ -35,6 +35,8 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [newItemName, setNewItemName] = useState('')
   // 計画パネルの開閉（モバイル用）
   const [planOpen, setPlanOpen] = useState(true)
+  // 計画編集モード（全ツリー表示）
+  const [planEditMode, setPlanEditMode] = useState(false)
 
   useEffect(() => { loadAll() }, [lessonId])
 
@@ -244,92 +246,156 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
             {planOpen && (
               <div>
-                <p className="px-4 py-2 text-xs text-gray-400">チェックして計画項目を選択、メモを記入できます</p>
-                {curriculumTree.map(root => (
-                  <div key={root.id}>
-                    <button
-                      onClick={() => setExpandedItems(prev => {
-                        const next = new Set(prev); next.has(root.id) ? next.delete(root.id) : next.add(root.id); return next
-                      })}
-                      className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100">
-                      <span className="font-semibold text-gray-800 text-sm">{root.name}</span>
-                      {expandedItems.has(root.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                    </button>
+                {/* ===== 通常表示：計画済み項目のみ ===== */}
+                {!planEditMode && (
+                  <>
+                    {!hasPlan ? (
+                      <div className="px-4 py-6 text-center text-gray-400 text-xs">
+                        <p>計画項目がありません</p>
+                        <button onClick={() => setPlanEditMode(true)} className="mt-2 text-indigo-500 hover:text-indigo-700 underline">項目を追加する</button>
+                      </div>
+                    ) : (
+                      <div>
+                        {curriculumTree.map(root => {
+                          // この大項目に計画済み項目があるか確認
+                          const allChildren = [
+                            ...(root.children ?? []),
+                            ...(root.children ?? []).flatMap(c => c.children ?? []),
+                          ]
+                          const rootHasPlan = planItemIds.has(root.id) || allChildren.some(c => planItemIds.has(c.id))
+                          if (!rootHasPlan) return null
+                          return (
+                            <div key={root.id} className="border-b border-gray-100 last:border-0">
+                              {/* 大項目ラベル */}
+                              <div className="px-4 py-2 bg-indigo-50/60">
+                                <span className="text-xs font-bold text-indigo-700">{root.name}</span>
+                              </div>
+                              {/* 計画済みの中項目・小項目 */}
+                              {(root.children ?? []).map(mid => {
+                                const midChildren = mid.children ?? []
+                                const midHasPlan = planItemIds.has(mid.id) || midChildren.some(c => planItemIds.has(c.id))
+                                if (!midHasPlan) return null
+                                const midPlanItem = planItems.find(p => p.curriculum_item_id === mid.id)
+                                return (
+                                  <div key={mid.id}>
+                                    {planItemIds.has(mid.id) && (
+                                      <div className="px-4 py-2 bg-gray-50/50 border-b border-gray-50">
+                                        <span className="text-xs font-medium text-gray-700">{mid.name}</span>
+                                        {midPlanItem && (
+                                          <textarea
+                                            value={midPlanItem.plan_notes ?? ''}
+                                            onChange={e => updatePlanNotes(midPlanItem.id, e.target.value)}
+                                            placeholder="計画メモ"
+                                            rows={2}
+                                            className="mt-1.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                                        )}
+                                      </div>
+                                    )}
+                                    {midChildren.filter(s => planItemIds.has(s.id)).map(small => {
+                                      const smallPlanItem = planItems.find(p => p.curriculum_item_id === small.id)
+                                      return (
+                                        <div key={small.id} className="pl-8 pr-4 py-2 border-b border-gray-50">
+                                          <span className="text-xs text-gray-600">{small.name}</span>
+                                          {smallPlanItem && (
+                                            <textarea
+                                              value={smallPlanItem.plan_notes ?? ''}
+                                              onChange={e => updatePlanNotes(smallPlanItem.id, e.target.value)}
+                                              placeholder="計画メモ"
+                                              rows={2}
+                                              className="mt-1.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                                          )}
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                        <button onClick={() => setPlanEditMode(true)}
+                          className="flex items-center gap-1 w-full px-4 py-2.5 text-xs text-gray-400 hover:text-indigo-500 transition-colors border-t border-gray-100">
+                          <Plus size={11} /> 項目を追加・変更する
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
 
-                    {expandedItems.has(root.id) && (
-                      <div className="border-b border-gray-100">
-                        {(root.children ?? []).map(mid => (
-                          <div key={mid.id}>
-                            <div className="flex items-start gap-2 px-4 py-2 bg-gray-50/60 border-b border-gray-50">
-                              <button onClick={() => togglePlanItem(mid)}
-                                className={`mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 transition-colors flex items-center justify-center ${planItemIds.has(mid.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 hover:border-indigo-400'}`}>
-                                {planItemIds.has(mid.id) && <span className="text-white text-[10px] font-bold">✓</span>}
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-xs font-medium text-gray-700">{mid.name}</span>
-                                {planItemIds.has(mid.id) && (
-                                  <textarea
-                                    value={planItems.find(p => p.curriculum_item_id === mid.id)?.plan_notes ?? ''}
-                                    onChange={e => { const pi = planItems.find(p => p.curriculum_item_id === mid.id); if (pi) updatePlanNotes(pi.id, e.target.value) }}
-                                    placeholder="計画メモ"
-                                    rows={2}
-                                    className="mt-1.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                {/* ===== 編集モード：全ツリー表示 ===== */}
+                {planEditMode && (
+                  <div>
+                    <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
+                      <span className="text-xs text-amber-700 font-medium">チェックで追加・解除</span>
+                      <button onClick={() => setPlanEditMode(false)}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">完了</button>
+                    </div>
+                    {curriculumTree.map(root => (
+                      <div key={root.id}>
+                        <button
+                          onClick={() => setExpandedItems(prev => {
+                            const next = new Set(prev); next.has(root.id) ? next.delete(root.id) : next.add(root.id); return next
+                          })}
+                          className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100">
+                          <span className="font-semibold text-gray-800 text-sm">{root.name}</span>
+                          {expandedItems.has(root.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                        </button>
+                        {expandedItems.has(root.id) && (
+                          <div className="border-b border-gray-100">
+                            {(root.children ?? []).map(mid => (
+                              <div key={mid.id}>
+                                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/60 border-b border-gray-50">
+                                  <button onClick={() => togglePlanItem(mid)}
+                                    className={`w-4 h-4 rounded flex-shrink-0 border-2 transition-colors flex items-center justify-center ${planItemIds.has(mid.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 hover:border-indigo-400'}`}>
+                                    {planItemIds.has(mid.id) && <span className="text-white text-[10px] font-bold">✓</span>}
+                                  </button>
+                                  <span className="text-xs font-medium text-gray-700">{mid.name}</span>
+                                </div>
+                                {(mid.children ?? []).map(small => (
+                                  <div key={small.id} className="flex items-center gap-2 pl-9 pr-4 py-2 border-b border-gray-50">
+                                    <button onClick={() => togglePlanItem(small)}
+                                      className={`w-3.5 h-3.5 rounded flex-shrink-0 border-2 transition-colors flex items-center justify-center ${planItemIds.has(small.id) ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 hover:border-indigo-400'}`}>
+                                      {planItemIds.has(small.id) && <span className="text-white text-[8px] font-bold">✓</span>}
+                                    </button>
+                                    <span className="text-xs text-gray-600">{small.name}</span>
+                                  </div>
+                                ))}
+                                {newItemParent?.parentId === mid.id ? (
+                                  <div className="flex items-center gap-2 pl-9 pr-4 py-2 border-b border-gray-50 bg-indigo-50/40">
+                                    <input value={newItemName} onChange={e => setNewItemName(e.target.value)}
+                                      onKeyDown={e => e.key === 'Enter' && addCurriculumItem()} placeholder="新しい小項目名" autoFocus
+                                      className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    <button onClick={addCurriculumItem} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-lg">追加</button>
+                                    <button onClick={() => setNewItemParent(null)} className="text-xs text-gray-400">×</button>
+                                  </div>
+                                ) : (
+                                  <button onClick={() => { setNewItemParent({ parentId: mid.id, level: 3 }); setNewItemName('') }}
+                                    className="flex items-center gap-1 pl-9 pr-4 py-1.5 text-xs text-gray-300 hover:text-indigo-500 transition-colors w-full">
+                                    <Plus size={10} /> 小項目を追加
+                                  </button>
                                 )}
                               </div>
-                            </div>
-                            {(mid.children ?? []).map(small => (
-                              <div key={small.id} className="flex items-start gap-2 pl-9 pr-4 py-2 border-b border-gray-50">
-                                <button onClick={() => togglePlanItem(small)}
-                                  className={`mt-0.5 w-3.5 h-3.5 rounded flex-shrink-0 border-2 transition-colors flex items-center justify-center ${planItemIds.has(small.id) ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 hover:border-indigo-400'}`}>
-                                  {planItemIds.has(small.id) && <span className="text-white text-[8px] font-bold">✓</span>}
-                                </button>
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-xs text-gray-600">{small.name}</span>
-                                  {planItemIds.has(small.id) && (
-                                    <textarea
-                                      value={planItems.find(p => p.curriculum_item_id === small.id)?.plan_notes ?? ''}
-                                      onChange={e => { const pi = planItems.find(p => p.curriculum_item_id === small.id); if (pi) updatePlanNotes(pi.id, e.target.value) }}
-                                      placeholder="計画メモ"
-                                      rows={2}
-                                      className="mt-1.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                                  )}
-                                </div>
-                              </div>
                             ))}
-                            {newItemParent?.parentId === mid.id ? (
-                              <div className="flex items-center gap-2 pl-9 pr-4 py-2 border-b border-gray-50 bg-indigo-50/40">
+                            {newItemParent?.parentId === root.id ? (
+                              <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50/40">
                                 <input value={newItemName} onChange={e => setNewItemName(e.target.value)}
-                                  onKeyDown={e => e.key === 'Enter' && addCurriculumItem()} placeholder="新しい小項目名" autoFocus
-                                  className="flex-1 border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                  onKeyDown={e => e.key === 'Enter' && addCurriculumItem()} placeholder="新しい中項目名" autoFocus
+                                  className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                                 <button onClick={addCurriculumItem} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-lg">追加</button>
                                 <button onClick={() => setNewItemParent(null)} className="text-xs text-gray-400">×</button>
                               </div>
                             ) : (
-                              <button onClick={() => { setNewItemParent({ parentId: mid.id, level: 3 }); setNewItemName('') }}
-                                className="flex items-center gap-1 pl-9 pr-4 py-1.5 text-xs text-gray-300 hover:text-indigo-500 transition-colors w-full">
-                                <Plus size={10} /> 小項目を追加
+                              <button onClick={() => { setNewItemParent({ parentId: root.id, level: 2 }); setNewItemName('') }}
+                                className="flex items-center gap-1 px-4 py-2.5 text-xs text-gray-300 hover:text-indigo-500 transition-colors w-full">
+                                <Plus size={11} /> 中項目を追加
                               </button>
                             )}
                           </div>
-                        ))}
-                        {newItemParent?.parentId === root.id ? (
-                          <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50/40">
-                            <input value={newItemName} onChange={e => setNewItemName(e.target.value)}
-                              onKeyDown={e => e.key === 'Enter' && addCurriculumItem()} placeholder="新しい中項目名" autoFocus
-                              className="flex-1 border border-indigo-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                            <button onClick={addCurriculumItem} className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-lg">追加</button>
-                            <button onClick={() => setNewItemParent(null)} className="text-xs text-gray-400">×</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => { setNewItemParent({ parentId: root.id, level: 2 }); setNewItemName('') }}
-                            className="flex items-center gap-1 px-4 py-2.5 text-xs text-gray-300 hover:text-indigo-500 transition-colors w-full">
-                            <Plus size={11} /> 中項目を追加
-                          </button>
                         )}
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>
