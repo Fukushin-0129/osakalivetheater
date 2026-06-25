@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, Student, Attendance } from '@/types/database'
 import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X, ArrowLeftRight, Plus, Trash2, Pencil } from 'lucide-react'
@@ -67,6 +68,7 @@ export default function AttendancePage() {
   const [subSaving, setSubSaving] = useState(false)
 
   const supabase = createClient()
+  const router = useRouter()
 
   // 初回ロード: レッスン・生徒・過去の現金取引を一括取得
   useEffect(() => {
@@ -289,6 +291,7 @@ export default function AttendancePage() {
     setCashOpen(prev => ({ ...prev, [studentId]: false }))
     setCashItemsState(prev => ({ ...prev, [studentId]: [{ category: 'レッスン収入', amount: '' }] }))
     setCashSaving(prev => ({ ...prev, [studentId]: false }))
+    router.push('/finance')
   }
 
   function openEditCash(lessonId: string, studentId: string) {
