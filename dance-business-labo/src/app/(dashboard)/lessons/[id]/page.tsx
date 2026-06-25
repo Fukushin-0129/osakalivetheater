@@ -231,7 +231,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
         {/* ======= 左：計画パネル ======= */}
         <div className="w-full lg:w-80 xl:w-96 flex-shrink-0 lg:sticky lg:top-4">
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-6rem)]">
             {/* 計画ヘッダー（モバイルでは折りたたみ可） */}
             <button
               className="w-full flex items-center justify-between px-4 py-3 bg-indigo-50 border-b border-indigo-100"
@@ -245,7 +245,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
             </button>
 
             {planOpen && (
-              <div>
+              <div className="overflow-y-auto flex-1">
                 {/* ===== 通常表示：計画済み項目のみ ===== */}
                 {!planEditMode && (
                   <>
@@ -281,14 +281,6 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
                                     {planItemIds.has(mid.id) && (
                                       <div className="px-4 py-2 bg-gray-50/50 border-b border-gray-50">
                                         <span className="text-xs font-medium text-gray-700">{mid.name}</span>
-                                        {midPlanItem && (
-                                          <textarea
-                                            value={midPlanItem.plan_notes ?? ''}
-                                            onChange={e => updatePlanNotes(midPlanItem.id, e.target.value)}
-                                            placeholder="計画メモ"
-                                            rows={2}
-                                            className="mt-1.5 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                                        )}
                                       </div>
                                     )}
                                     {midChildren.filter(s => planItemIds.has(s.id)).map(small => {
