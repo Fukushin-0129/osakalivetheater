@@ -16,6 +16,7 @@ export type Student = {
   is_active: boolean
   joined_at: string | null
   avatar_url: string | null
+  goal: string | null
   created_at: string
   updated_at: string
 }
