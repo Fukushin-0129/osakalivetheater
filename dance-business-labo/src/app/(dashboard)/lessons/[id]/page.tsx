@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType, CurriculumItem, LessonPlanItem, LessonEvaluation, Student } from '@/types/database'
 import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X } from 'lucide-react'
@@ -37,6 +37,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [planOpen, setPlanOpen] = useState(true)
   // 計画編集モード（全ツリー表示）
   const [planEditMode, setPlanEditMode] = useState(false)
+  const composingRef = useRef(false)
   // 計画メモ・評価メモの編集中ID
   const [editingPlanNote, setEditingPlanNote] = useState<string | null>(null)
   const [editingEvalNote, setEditingEvalNote] = useState<string | null>(null) // `${studentId}:${itemId}`
@@ -365,8 +366,10 @@ ${planSummary || '（未設定）'}`
                                           )}
                                           {smallPlanItem && editingPlanNote === smallPlanItem.id && (
                                             <textarea
-                                              value={smallPlanItem.plan_notes ?? ''}
-                                              onChange={e => updatePlanNotes(smallPlanItem.id, e.target.value)}
+                                              defaultValue={smallPlanItem.plan_notes ?? ''}
+                                              onCompositionStart={() => { composingRef.current = true }}
+                                              onCompositionEnd={e => { composingRef.current = false; updatePlanNotes(smallPlanItem.id, (e.target as HTMLTextAreaElement).value) }}
+                                              onChange={e => { if (!composingRef.current) updatePlanNotes(smallPlanItem.id, e.target.value) }}
                                               onBlur={() => setEditingPlanNote(null)}
                                               placeholder="計画メモ"
                                               rows={2}
@@ -556,8 +559,10 @@ ${planSummary || '（未設定）'}`
                                         )}
                                         {editingEvalNote === `${att.student_id}:${small.id}` && (
                                           <textarea
-                                            value={val?.notes ?? ''}
-                                            onChange={e => setEval(att.student_id, small.id, 'notes', e.target.value)}
+                                            defaultValue={val?.notes ?? ''}
+                                            onCompositionStart={() => { composingRef.current = true }}
+                                            onCompositionEnd={e => { composingRef.current = false; setEval(att.student_id, small.id, 'notes', (e.target as HTMLTextAreaElement).value) }}
+                                            onChange={e => { if (!composingRef.current) setEval(att.student_id, small.id, 'notes', e.target.value) }}
                                             onBlur={() => setEditingEvalNote(null)}
                                             placeholder="メモ（生徒と共有されます）"
                                             rows={2}
@@ -644,8 +649,10 @@ ${planSummary || '（未設定）'}`
           <div className="flex items-end gap-2 px-3 py-3 border-t border-gray-100">
             <textarea
               value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
+              onCompositionStart={() => { composingRef.current = true }}
+              onCompositionEnd={e => { composingRef.current = false; setChatInput((e.target as HTMLTextAreaElement).value) }}
+              onChange={e => { if (!composingRef.current) setChatInput(e.target.value) }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !composingRef.current) { e.preventDefault(); sendChat() } }}
               placeholder="メッセージを入力..."
               rows={2}
               className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
