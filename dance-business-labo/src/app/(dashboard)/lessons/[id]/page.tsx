@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType, CurriculumItem, LessonPlanItem, LessonEvaluation, Student } from '@/types/database'
-import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X } from 'lucide-react'
 import Link from 'next/link'
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
@@ -37,6 +37,11 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [planOpen, setPlanOpen] = useState(true)
   // 計画編集モード（全ツリー表示）
   const [planEditMode, setPlanEditMode] = useState(false)
+  // AIチャット
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
 
   useEffect(() => { loadAll() }, [lessonId])
 
@@ -186,6 +191,62 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     setSaving(false)
     setSavedEval(true)
     setTimeout(() => setSavedEval(false), 3000)
+  }
+
+  async function sendChat() {
+    if (!chatInput.trim() || chatLoading || !lesson) return
+    const userMsg = { role: 'user' as const, content: chatInput.trim() }
+    const newMessages = [...chatMessages, userMsg]
+    setChatMessages(newMessages)
+    setChatInput('')
+    setChatLoading(true)
+
+    const dt = parseJST(lesson.scheduled_at)
+    const planSummary = curriculumTree.map(root => {
+      const mids = (root.children ?? []).filter(mid =>
+        planItemIds.has(mid.id) || (mid.children ?? []).some(s => planItemIds.has(s.id))
+      )
+      if (!mids.length) return null
+      return `【${root.name}】\n` + mids.map(mid => {
+        const smalls = (mid.children ?? []).filter(s => planItemIds.has(s.id))
+        return `  ${mid.name}` + (smalls.length ? '\n' + smalls.map(s => `    ・${s.name}`).join('\n') : '')
+      }).join('\n')
+    }).filter(Boolean).join('\n\n')
+
+    const lessonContext = `日時: ${dt.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })} ${dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+レッスン名: ${lesson.title}
+出席予定生徒数: ${attendingStudents.length}名
+
+## 現在の計画項目
+${planSummary || '（未設定）'}`
+
+    try {
+      const res = await fetch('/api/lessons/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages, lessonContext }),
+      })
+      if (!res.ok || !res.body) throw new Error('API error')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let assistantText = ''
+      setChatMessages(prev => [...prev, { role: 'assistant', content: '' }])
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        assistantText += decoder.decode(value, { stream: true })
+        setChatMessages(prev => {
+          const msgs = [...prev]
+          msgs[msgs.length - 1] = { role: 'assistant', content: assistantText }
+          return msgs
+        })
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'エラーが発生しました。ANTHROPIC_API_KEYが設定されているか確認してください。' }])
+    }
+    setChatLoading(false)
   }
 
   async function addCurriculumItem() {
@@ -423,40 +484,61 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
                       <span className="font-semibold text-gray-800 text-sm">{student.name}</span>
                       {student.name_kana && <span className="text-xs text-gray-400 ml-2">{student.name_kana}</span>}
                     </div>
-                    <div className="divide-y divide-gray-50">
-                      {planItems.map(pi => {
-                        const item = pi.curriculum_items as CurriculumItem | null
-                        if (!item) return null
-                        const val = evalMap[att.student_id]?.[item.id]
-                        const parent = item.parent_id
-                          ? curriculumTree.flatMap(r => [...(r.children ?? []), ...(r.children?.flatMap(c => c.children ?? []) ?? [])]).find(c => c.id === item.parent_id)
-                          : null
+                    <div>
+                      {curriculumTree.map(root => {
+                        const allDescendants = [
+                          ...(root.children ?? []),
+                          ...(root.children ?? []).flatMap(c => c.children ?? []),
+                        ]
+                        const rootHasPlan = planItemIds.has(root.id) || allDescendants.some(c => planItemIds.has(c.id))
+                        if (!rootHasPlan) return null
                         return (
-                          <div key={pi.id} className="px-4 py-3">
-                            <div className="flex items-start gap-3 mb-1.5">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs text-gray-400">{parent?.name ?? item.name}</p>
-                                {parent && <p className="text-sm font-medium text-gray-700">{item.name}</p>}
-                                {pi.plan_notes && (
-                                  <p className="text-xs text-indigo-400 mt-0.5">計画: {pi.plan_notes}</p>
-                                )}
-                              </div>
-                              <div className="flex gap-0.5 flex-shrink-0">
-                                {[1, 2, 3, 4, 5].map(s => (
-                                  <button key={s}
-                                    onClick={() => setEval(att.student_id, item.id, 'rating', s === (val?.rating ?? 0) ? 0 : s)}
-                                    className={`transition-colors ${s <= (val?.rating ?? 0) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}>
-                                    <Star size={18} fill={s <= (val?.rating ?? 0) ? 'currentColor' : 'none'} />
-                                  </button>
-                                ))}
-                              </div>
+                          <div key={root.id} className="border-b border-gray-100 last:border-0">
+                            <div className="px-4 py-2 bg-indigo-50/60">
+                              <span className="text-xs font-bold text-indigo-700">{root.name}</span>
                             </div>
-                            <textarea
-                              value={val?.notes ?? ''}
-                              onChange={e => setEval(att.student_id, item.id, 'notes', e.target.value)}
-                              placeholder="メモ（生徒と共有されます）"
-                              rows={2}
-                              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                            {(root.children ?? []).map(mid => {
+                              const midChildren = mid.children ?? []
+                              const midHasPlan = planItemIds.has(mid.id) || midChildren.some(c => planItemIds.has(c.id))
+                              if (!midHasPlan) return null
+                              const smallPlanned = midChildren.filter(s => planItemIds.has(s.id))
+                              return (
+                                <div key={mid.id}>
+                                  <div className="px-4 py-2 bg-gray-50/50 border-t border-gray-100">
+                                    <span className="text-xs font-medium text-gray-600">{mid.name}</span>
+                                  </div>
+                                  {smallPlanned.map(small => {
+                                    const pi = planItems.find(p => p.curriculum_item_id === small.id)
+                                    const val = evalMap[att.student_id]?.[small.id]
+                                    return (
+                                      <div key={small.id} className="px-4 py-3 border-t border-gray-50">
+                                        <div className="flex items-center gap-3 mb-1.5">
+                                          <span className="flex-1 text-sm text-gray-700">{small.name}</span>
+                                          <div className="flex gap-0.5 flex-shrink-0">
+                                            {[1, 2, 3, 4, 5].map(s => (
+                                              <button key={s}
+                                                onClick={() => setEval(att.student_id, small.id, 'rating', s === (val?.rating ?? 0) ? 0 : s)}
+                                                className={`transition-colors ${s <= (val?.rating ?? 0) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}>
+                                                <Star size={18} fill={s <= (val?.rating ?? 0) ? 'currentColor' : 'none'} />
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        {pi?.plan_notes && (
+                                          <p className="text-xs text-indigo-400 mb-1">計画: {pi.plan_notes}</p>
+                                        )}
+                                        <textarea
+                                          value={val?.notes ?? ''}
+                                          onChange={e => setEval(att.student_id, small.id, 'notes', e.target.value)}
+                                          placeholder="メモ（生徒と共有されます）"
+                                          rows={2}
+                                          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })}
                           </div>
                         )
                       })}
@@ -476,6 +558,73 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
           )}
         </div>
       </div>
+
+      {/* AIチャットボタン（フローティング） */}
+      <button
+        onClick={() => setChatOpen(v => !v)}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-full shadow-lg transition-colors">
+        <MessageSquare size={18} />
+        <span className="text-sm font-medium">AIと相談</span>
+      </button>
+
+      {/* AIチャットパネル */}
+      {chatOpen && (
+        <div className="fixed bottom-20 right-6 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col" style={{ maxHeight: '70vh' }}>
+          {/* ヘッダー */}
+          <div className="flex items-center justify-between px-4 py-3 bg-indigo-600 rounded-t-2xl">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={15} className="text-white" />
+              <span className="text-sm font-semibold text-white">AI計画アシスタント</span>
+            </div>
+            <button onClick={() => setChatOpen(false)} className="text-indigo-200 hover:text-white">
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* メッセージ一覧 */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+            {chatMessages.length === 0 && (
+              <div className="text-center text-gray-400 text-xs py-6">
+                <p className="mb-2">現在の計画について何でも相談してください</p>
+                <div className="space-y-1">
+                  {['この計画の進め方を教えて', '追加すると良い項目は？', '時間配分のアドバイスをして'].map(hint => (
+                    <button key={hint} onClick={() => setChatInput(hint)}
+                      className="block w-full text-left bg-gray-50 hover:bg-indigo-50 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-600 transition-colors">
+                      {hint}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                  msg.role === 'user'
+                    ? 'bg-indigo-600 text-white rounded-br-sm'
+                    : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+                }`}>
+                  {msg.content || <span className="opacity-50">...</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 入力欄 */}
+          <div className="flex items-end gap-2 px-3 py-3 border-t border-gray-100">
+            <textarea
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
+              placeholder="メッセージを入力..."
+              rows={2}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+            <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
+              className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white p-2.5 rounded-xl transition-colors">
+              {chatLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
