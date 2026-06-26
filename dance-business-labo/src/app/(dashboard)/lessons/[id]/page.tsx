@@ -650,8 +650,8 @@ ${planSummary || '（未設定）'}`
             <textarea
               value={chatInput}
               onCompositionStart={() => { composingRef.current = true }}
-              onCompositionEnd={e => { composingRef.current = false; setChatInput((e.target as HTMLTextAreaElement).value) }}
-              onChange={e => { if (!composingRef.current) setChatInput(e.target.value) }}
+              onCompositionEnd={() => { composingRef.current = false }}
+              onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !composingRef.current) { e.preventDefault(); sendChat() } }}
               placeholder="メッセージを入力..."
               rows={2}
