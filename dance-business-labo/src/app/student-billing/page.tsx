@@ -15,14 +15,7 @@ export default function StudentBillingPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-        if (!supabaseUrl || !anonKey) {
-          throw new Error('Missing Supabase configuration')
-        }
-
-        const supabase = createClient(supabaseUrl, anonKey)
+        const supabase = createClient()
         const {
           data: { user },
         } = await supabase.auth.getUser()
@@ -34,12 +27,15 @@ export default function StudentBillingPage() {
 
         setUserEmail(user.email || null)
 
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
         // Get subscription types
         const subResponse = await fetch(
           `${supabaseUrl}/rest/v1/subscription_types?select=*`,
           {
             headers: {
-              apikey: anonKey,
+              apikey: anonKey!,
               Authorization: `Bearer ${anonKey}`,
             },
           }
@@ -55,7 +51,7 @@ export default function StudentBillingPage() {
           `${supabaseUrl}/rest/v1/ticket_types?select=*`,
           {
             headers: {
-              apikey: anonKey,
+              apikey: anonKey!,
               Authorization: `Bearer ${anonKey}`,
             },
           }
