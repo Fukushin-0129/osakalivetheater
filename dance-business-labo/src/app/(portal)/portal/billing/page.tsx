@@ -43,6 +43,7 @@ export default function BillingPage() {
   const [studentTickets, setStudentTickets] = useState<StudentTicket[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,14 +73,23 @@ export default function BillingPage() {
         const subs = await subResponse.json()
         setSubscriptionTypes(subs)
 
-        // Get ticket types from API route
-        const ticketRes = await fetch('/api/dashboard/tickets')
+        // Get ticket types from REST API
+        const ticketRes = await fetch(
+          `${supabaseUrl}/rest/v1/ticket_types?select=*`,
+          {
+            headers: {
+              apikey: anonKey,
+              Authorization: `Bearer ${anonKey}`,
+            },
+          }
+        )
+
         if (!ticketRes.ok) {
           throw new Error('Failed to fetch ticket types')
         }
 
-        const ticketData = await ticketRes.json()
-        setTicketTypes(ticketData.data || [])
+        const tickets = await ticketRes.json()
+        setTicketTypes(tickets)
 
         // Get student data using client
         const supabase = createClient(supabaseUrl, anonKey)
@@ -91,6 +101,8 @@ export default function BillingPage() {
           router.push('/login')
           return
         }
+
+        setUserEmail(user.email || null)
 
         // Get student subscriptions
         const { data: subscriptions } = await supabase
@@ -198,6 +210,12 @@ export default function BillingPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
+        <div className="mb-4">
+          <span className="text-sm text-gray-600">【生徒ポータル】</span>
+          {userEmail && (
+            <p className="text-sm text-gray-500">ログイン中: {userEmail}</p>
+          )}
+        </div>
         <h1 className="text-3xl font-bold mb-8">支払い管理</h1>
 
         {error && (
