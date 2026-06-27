@@ -53,7 +53,26 @@ export default function LoginPage() {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        router.push('/student-billing')
+
+        // 生徒か先生かを判定
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        const studentRes = await fetch(
+          `${supabaseUrl}/rest/v1/students?email=eq.${encodeURIComponent(email)}&select=id`,
+          {
+            headers: {
+              apikey: anonKey!,
+              Authorization: `Bearer ${anonKey}`,
+            },
+          }
+        )
+        const students = await studentRes.json()
+
+        if (Array.isArray(students) && students.length > 0) {
+          router.push('/student-billing')
+        } else {
+          router.push('/')
+        }
         router.refresh()
         return
       }
