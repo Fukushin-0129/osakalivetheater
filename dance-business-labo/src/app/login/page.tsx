@@ -176,7 +176,6 @@ export default function LoginPage() {
                     required
                     autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                     placeholder="••••••••"
-                    minLength={mode === 'signup' ? 6 : undefined}
                     className="w-full px-4 py-2.5 pr-11 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-shadow"
                   />
                   <button
@@ -213,7 +212,7 @@ export default function LoginPage() {
             {/* 送信ボタン */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (mode === 'signup' && password.length < 6)}
               className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-medium py-2.5 rounded-xl transition-colors text-sm"
             >
               {loading && <Loader2 size={16} className="animate-spin" />}
