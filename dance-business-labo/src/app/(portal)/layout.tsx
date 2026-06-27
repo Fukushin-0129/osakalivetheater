@@ -21,6 +21,9 @@ export default async function PortalLayout({ children }: { children: React.React
           <Link href="/portal/reserve" className="px-3 py-1.5 rounded-lg text-sm text-indigo-200 hover:bg-indigo-700 hover:text-white transition-colors">
             予約
           </Link>
+          <Link href="/portal/billing" className="px-3 py-1.5 rounded-lg text-sm text-indigo-200 hover:bg-indigo-700 hover:text-white transition-colors">
+            料金・支払い
+          </Link>
         </nav>
       </header>
       <main className="max-w-2xl mx-auto px-4 py-6">
