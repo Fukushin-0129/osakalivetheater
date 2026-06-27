@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   BookOpen,
+  CreditCard,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/lessons', label: 'レッスン', icon: Calendar },
   { href: '/curriculum', label: 'カリキュラム', icon: BookOpen },
   { href: '/attendance', label: '出席管理', icon: ClipboardCheck },
+  { href: '/subscriptions', label: '月謝管理', icon: CreditCard },
   { href: '/tickets', label: 'チケット', icon: Ticket },
   { href: '/records', label: 'カルテ', icon: FileText },
   { href: '/finance', label: '損益管理', icon: TrendingUp },
