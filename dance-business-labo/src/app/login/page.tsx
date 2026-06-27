@@ -188,8 +188,8 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                {mode === 'signup' && (
-                  <p className="text-xs text-gray-400 mt-1">6文字以上で入力してください</p>
+                {mode === 'signup' && password.length > 0 && password.length < 6 && (
+                  <p className="text-xs text-red-500 mt-1">6文字以上で入力してください</p>
                 )}
               </div>
             )}
