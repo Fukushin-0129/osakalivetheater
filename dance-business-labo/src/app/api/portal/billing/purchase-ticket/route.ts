@@ -1,0 +1,91 @@
+import { stripe } from '@/lib/stripe'
+import { createClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from 'next/server'
+
+const getSupabase = () =>
+  createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const { ticket_type_id, student_id } = body
+
+    if (!ticket_type_id || !student_id) {
+      return NextResponse.json(
+        { error: 'ticket_type_id and student_id are required' },
+        { status: 400 }
+      )
+    }
+
+    const supabase = getSupabase()
+
+    // Get ticket type
+    const { data: ticketType, error: ticketError } = await supabase
+      .from('ticket_types')
+      .select('*')
+      .eq('id', ticket_type_id)
+      .single()
+
+    if (ticketError || !ticketType) {
+      return NextResponse.json(
+        { error: 'Ticket type not found' },
+        { status: 404 }
+      )
+    }
+
+    // Get student
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select('email')
+      .eq('id', student_id)
+      .single()
+
+    if (studentError || !student) {
+      return NextResponse.json(
+        { error: 'Student not found' },
+        { status: 404 }
+      )
+    }
+
+    // Create Stripe checkout session for ticket purchase
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'jpy',
+            product_data: {
+              name: ticketType.name,
+              description: `${ticketType.total_count}回のレッスンチケット`,
+            },
+            unit_amount: ticketType.price,
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/portal/billing?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/portal/billing?canceled=true`,
+      customer_email: student.email || undefined,
+      metadata: {
+        student_id,
+        ticket_type_id,
+        type: 'ticket_purchase',
+      },
+    })
+
+    return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
+    })
+  } catch (error) {
+    console.error('Error creating checkout session:', error)
+    return NextResponse.json(
+      { error: 'Failed to create checkout session' },
+      { status: 500 }
+    )
+  }
+}
