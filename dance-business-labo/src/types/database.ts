@@ -177,3 +177,42 @@ export type StudentPayment = {
   updated_at: string
   students?: Student
 }
+
+export type LinkedInConnection = {
+  id: string
+  linkedin_id: string
+  first_name: string
+  last_name: string
+  email: string | null
+  headline: string | null
+  profile_url: string | null
+  picture_url: string | null
+  request_received_at: string
+  status: 'pending' | 'accepted' | 'rejected'
+  created_at: string
+  updated_at: string
+}
+
+export type MessageTemplate = {
+  id: string
+  name: string
+  subject: string
+  body: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type LinkedInMessage = {
+  id: string
+  connection_id: string
+  template_id: string | null
+  message_text: string
+  sent_at: string | null
+  delivery_status: 'draft' | 'sent' | 'failed'
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  connections?: LinkedInConnection
+  templates?: MessageTemplate
+}
