@@ -133,3 +133,47 @@ export type Transaction = {
   description: string | null
   created_at: string
 }
+
+export type SubscriptionType = {
+  id: string
+  name: string
+  monthly_price: number
+  max_lessons_per_month: number | null
+  created_at: string
+}
+
+export type SubscriptionStatus = 'active' | 'paused' | 'cancelled'
+
+export type StudentSubscription = {
+  id: string
+  student_id: string
+  subscription_type_id: string
+  start_date: string
+  end_date: string | null
+  status: SubscriptionStatus
+  monthly_price: number
+  billing_day: number | null
+  next_payment_date: string | null
+  created_at: string
+  updated_at: string
+  subscription_types?: SubscriptionType
+  students?: Student
+}
+
+export type PaymentType = 'ticket_purchase' | 'subscription_payment' | 'manual'
+
+export type PaymentStatus = 'pending' | 'completed' | 'failed'
+
+export type StudentPayment = {
+  id: string
+  student_id: string
+  amount: number
+  payment_date: string
+  payment_type: PaymentType
+  reference_id: string | null
+  status: PaymentStatus
+  notes: string | null
+  created_at: string
+  updated_at: string
+  students?: Student
+}
