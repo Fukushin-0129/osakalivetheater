@@ -53,7 +53,7 @@ export default function LoginPage() {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        router.push('/')
+        router.push('/student-billing')
         router.refresh()
         return
       }
