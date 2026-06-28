@@ -257,9 +257,11 @@ export default function StudentBillingPage() {
             : 'チケットを購入します'
         }
         message={
-          selectedItem?.type === 'subscription'
-            ? `${(selectedItem?.item as SubscriptionType).name} ¥${(selectedItem?.item as SubscriptionType).monthly_price.toLocaleString()}/月\n\nこのプランに登録してよろしいですか？`
-            : `${(selectedItem?.item as TicketType).name}\n¥${(selectedItem?.item as TicketType).price.toLocaleString()}\n\nこのチケットを購入してよろしいですか？`
+          selectedItem?.item
+            ? selectedItem?.type === 'subscription'
+              ? `${(selectedItem?.item as SubscriptionType).name} ¥${(selectedItem?.item as SubscriptionType).monthly_price.toLocaleString()}/月\n\nこのプランに登録してよろしいですか？`
+              : `${(selectedItem?.item as TicketType).name}\n¥${(selectedItem?.item as TicketType).price.toLocaleString()}\n\nこのチケットを購入してよろしいですか？`
+            : ''
         }
         confirmText={selectedItem?.type === 'subscription' ? '登録する' : '購入する'}
         cancelText="キャンセル"
