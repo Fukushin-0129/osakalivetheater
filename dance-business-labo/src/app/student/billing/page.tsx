@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import ConfirmationModal from '@/components/ConfirmationModal'
+import Toast from '@/components/Toast'
 
 interface SubscriptionType {
   id: string
@@ -22,6 +24,11 @@ export default function StudentBillingPage() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionType[]>([])
   const [tickets, setTickets] = useState<TicketType[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedItem, setSelectedItem] = useState<{ type: 'subscription' | 'ticket'; item: SubscriptionType | TicketType } | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [toastOpen, setToastOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -142,6 +149,36 @@ export default function StudentBillingPage() {
     fetchData()
   }, [])
 
+  const handleSubscriptionRegister = (sub: SubscriptionType) => {
+    setSelectedItem({ type: 'subscription', item: sub })
+    setModalOpen(true)
+  }
+
+  const handleTicketPurchase = (ticket: TicketType) => {
+    setSelectedItem({ type: 'ticket', item: ticket })
+    setModalOpen(true)
+  }
+
+  const handleConfirm = async () => {
+    setIsProcessing(true)
+    // API 呼び出しのシミュレーション
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    if (selectedItem?.type === 'subscription') {
+      setToastMessage(
+        `✅ ${(selectedItem.item as SubscriptionType).name}に登録しました`
+      )
+    } else {
+      setToastMessage(
+        `✅ ${(selectedItem?.item as TicketType).name}を購入しました`
+      )
+    }
+
+    setToastOpen(true)
+    setModalOpen(false)
+    setIsProcessing(false)
+  }
+
   if (loading) {
     return <div className="text-center py-12">読み込み中...</div>
   }
@@ -171,7 +208,10 @@ export default function StudentBillingPage() {
                 {sub.max_lessons_per_month && (
                   <p className="text-gray-600 mb-4">月{sub.max_lessons_per_month}回まで</p>
                 )}
-                <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition">
+                <button
+                  onClick={() => handleSubscriptionRegister(sub)}
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition"
+                >
                   登録する
                 </button>
               </div>
@@ -196,7 +236,10 @@ export default function StudentBillingPage() {
                   ¥{ticket.price.toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-500 mb-4">有効期限: {ticket.valid_days}日間</p>
-                <button className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition">
+                <button
+                  onClick={() => handleTicketPurchase(ticket)}
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition"
+                >
                   購入する
                 </button>
               </div>
@@ -204,6 +247,38 @@ export default function StudentBillingPage() {
           </div>
         </div>
       )}
+
+      {/* モーダル */}
+      <ConfirmationModal
+        isOpen={modalOpen}
+        title={
+          selectedItem?.type === 'subscription'
+            ? '月謝プランに登録します'
+            : 'チケットを購入します'
+        }
+        message={
+          selectedItem?.type === 'subscription'
+            ? `${(selectedItem?.item as SubscriptionType).name} ¥${(selectedItem?.item as SubscriptionType).monthly_price.toLocaleString()}/月\n\nこのプランに登録してよろしいですか？`
+            : `${(selectedItem?.item as TicketType).name}\n¥${(selectedItem?.item as TicketType).price.toLocaleString()}\n\nこのチケットを購入してよろしいですか？`
+        }
+        confirmText={selectedItem?.type === 'subscription' ? '登録する' : '購入する'}
+        cancelText="キャンセル"
+        isLoading={isProcessing}
+        onConfirm={handleConfirm}
+        onCancel={() => {
+          setModalOpen(false)
+          setSelectedItem(null)
+        }}
+        type="confirm"
+      />
+
+      {/* トースト通知 */}
+      <Toast
+        isOpen={toastOpen}
+        message={toastMessage}
+        type="success"
+        onClose={() => setToastOpen(false)}
+      />
     </div>
   )
 }

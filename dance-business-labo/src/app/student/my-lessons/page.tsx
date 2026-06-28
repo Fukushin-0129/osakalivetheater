@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { Calendar, Clock, MapPin, User, Trash2, CheckCircle } from 'lucide-react'
+import ConfirmationModal from '@/components/ConfirmationModal'
+import Toast from '@/components/Toast'
 
 interface BookedLesson {
   id: string
@@ -16,6 +18,10 @@ interface BookedLesson {
 export default function MyLessonsPage() {
   const [lessons, setLessons] = useState<BookedLesson[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedLessonToDelete, setSelectedLessonToDelete] = useState<BookedLesson | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [toastOpen, setToastOpen] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     // TODO: API から実際の予約情報を取得
@@ -51,6 +57,20 @@ export default function MyLessonsPage() {
     ])
     setLoading(false)
   }, [])
+
+  const handleDelete = (lesson: BookedLesson) => {
+    setSelectedLessonToDelete(lesson)
+    setModalOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    setIsProcessing(true)
+    // API 呼び出しのシミュレーション
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    setToastOpen(true)
+    setModalOpen(false)
+    setIsProcessing(false)
+  }
 
   const upcomingLessons = lessons.filter((l) => l.status === 'upcoming')
   const completedLessons = lessons.filter((l) => l.status === 'completed')
@@ -104,7 +124,10 @@ export default function MyLessonsPage() {
                       </div>
                     </div>
                   </div>
-                  <button className="text-red-600 hover:text-red-700 p-2">
+                  <button
+                    onClick={() => handleDelete(lesson)}
+                    className="text-red-600 hover:text-red-700 p-2"
+                  >
                     <Trash2 size={20} />
                   </button>
                 </div>
@@ -151,6 +174,34 @@ export default function MyLessonsPage() {
           </div>
         )}
       </div>
+
+      {/* 削除確認モーダル */}
+      <ConfirmationModal
+        isOpen={modalOpen}
+        title="レッスンをキャンセルしますか？"
+        message={
+          selectedLessonToDelete
+            ? `${selectedLessonToDelete.title}\n${new Date(selectedLessonToDelete.scheduled_at).toLocaleDateString('ja-JP')} ${new Date(selectedLessonToDelete.scheduled_at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}\n\nキャンセルしてよろしいですか？`
+            : ''
+        }
+        confirmText="キャンセルする"
+        cancelText="戻る"
+        isLoading={isProcessing}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setModalOpen(false)
+          setSelectedLessonToDelete(null)
+        }}
+        type="warning"
+      />
+
+      {/* トースト通知 */}
+      <Toast
+        isOpen={toastOpen}
+        message={`✅ レッスンをキャンセルしました`}
+        type="success"
+        onClose={() => setToastOpen(false)}
+      />
     </div>
   )
 }
