@@ -6,13 +6,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
+    const category = request.nextUrl.searchParams.get('category')
+
+    let query = supabase
       .from('message_templates')
       .select('*')
       .eq('is_active', true)
-      .order('created_at', { ascending: false })
+
+    if (category) {
+      query = query.eq('category', category)
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false })
 
     if (error) throw error
 
@@ -29,7 +36,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, subject, body: templateBody } = body
+    const { name, subject, body: templateBody, category = 'general' } = body
 
     if (!name || !subject || !templateBody) {
       return NextResponse.json(
@@ -42,6 +49,7 @@ export async function POST(request: NextRequest) {
       .from('message_templates')
       .insert({
         name,
+        category,
         subject,
         body: templateBody,
         is_active: true,

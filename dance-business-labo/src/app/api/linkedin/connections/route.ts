@@ -43,6 +43,8 @@ export async function POST(request: NextRequest) {
       headline,
       profile_url,
       picture_url,
+      country,
+      category = 'general',
     } = body
 
     if (!linkedin_id || !first_name || !last_name) {
@@ -51,6 +53,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    const validCategories = ['career_opportunity', 'international', 'business', 'general']
+    const finalCategory = validCategories.includes(category) ? category : 'general'
 
     const { data, error } = await supabase
       .from('linkedin_connections')
@@ -62,6 +67,8 @@ export async function POST(request: NextRequest) {
         headline: headline || null,
         profile_url: profile_url || null,
         picture_url: picture_url || null,
+        country: country || null,
+        category: finalCategory,
         request_received_at: new Date().toISOString(),
         status: 'pending',
       })

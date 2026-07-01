@@ -178,6 +178,8 @@ export type StudentPayment = {
   students?: Student
 }
 
+export type ConnectionCategory = 'career_opportunity' | 'international' | 'business' | 'general'
+
 export type LinkedInConnection = {
   id: string
   linkedin_id: string
@@ -187,6 +189,8 @@ export type LinkedInConnection = {
   headline: string | null
   profile_url: string | null
   picture_url: string | null
+  country: string | null
+  category: ConnectionCategory
   request_received_at: string
   status: 'pending' | 'accepted' | 'rejected'
   created_at: string

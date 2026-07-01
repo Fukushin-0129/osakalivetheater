@@ -9,7 +9,7 @@ const supabase = createClient(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { connection_id, template_id, custom_message } = body
+    const { connection_id, template_id, custom_message, auto_select = true } = body
 
     if (!connection_id) {
       return NextResponse.json(
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate connection exists
+    // Fetch connection details
     const { data: connection, error: connectionError } = await supabase
       .from('linkedin_connections')
       .select('*')
@@ -33,7 +33,26 @@ export async function POST(request: NextRequest) {
     }
 
     let messageText = custom_message
+    let selectedTemplateId = template_id
 
+    // Auto-select template based on connection category if enabled
+    if (!messageText && auto_select && !template_id) {
+      const { data: template, error: templateError } = await supabase
+        .from('message_templates')
+        .select('id, body')
+        .eq('category', connection.category)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (!templateError && template) {
+        messageText = template.body
+        selectedTemplateId = template.id
+      }
+    }
+
+    // If still no message, try to use provided template_id
     if (!messageText && template_id) {
       const { data: template, error: templateError } = await supabase
         .from('message_templates')
@@ -53,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     if (!messageText) {
       return NextResponse.json(
-        { error: 'Message text is required' },
+        { error: 'Message text is required. No template found for category: ' + connection.category },
         { status: 400 }
       )
     }
@@ -63,7 +82,7 @@ export async function POST(request: NextRequest) {
       .from('linkedin_messages')
       .insert({
         connection_id,
-        template_id: template_id || null,
+        template_id: selectedTemplateId || null,
         message_text: messageText,
         delivery_status: 'draft',
       })
