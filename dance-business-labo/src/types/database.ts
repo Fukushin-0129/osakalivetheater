@@ -37,8 +37,26 @@ export type Lesson = {
   location: string | null
   max_capacity: number
   notes: string | null
+  plan_content: string | null
+  plan_goal: string | null
+  plan_generated_at: string | null
+  plan_status: string
   created_at: string
   lesson_types?: LessonType
+  lesson_plans?: LessonPlan
+}
+
+export type LessonPlan = {
+  id: string
+  lesson_id: string
+  content: string | null
+  goal: string | null
+  generated_from_lesson_id: string | null
+  status: string
+  generated_at: string
+  created_at: string
+  updated_at: string
+  lessons?: Lesson
 }
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'cancelled' | 'substituted'

@@ -513,6 +513,11 @@ export default function LessonsPage() {
                                 )
                               })()}
                               <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 mr-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors font-medium"><BookOpen size={13} /> 計画・評価</Link>
+                              {l.plan_status === 'planned' && (
+                                <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full mr-2">
+                                  ✓ 計画済
+                                </span>
+                              )}
                               <button onClick={() => openSubModal(l)} className="text-gray-400 hover:text-orange-500 mr-1 p-1.5 rounded hover:bg-orange-50 transition-colors" title="振替設定"><ArrowLeftRight size={14} /></button>
                               <button onClick={() => openEdit(l)} className="text-gray-400 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors"><Pencil size={14} /></button>
                               <button onClick={() => handleDelete(l)} className="text-gray-400 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
@@ -602,6 +607,11 @@ export default function LessonsPage() {
                                       </>
                                     )
                                   })()}
+                                  {l.plan_status === 'planned' && (
+                                    <span className="inline-flex items-center gap-1 text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full mr-2">
+                                      ✓ 計画済
+                                    </span>
+                                  )}
                                   <Link href={`/lessons/${l.id}`} className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 mr-1 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"><BookOpen size={13} /> 計画・評価</Link>
                                   <button onClick={() => openSubModal(l)} className="text-gray-300 hover:text-orange-500 mr-1 p-1.5 rounded hover:bg-orange-50 transition-colors" title="振替設定"><ArrowLeftRight size={14} /></button>
                                   <button onClick={() => openEdit(l)} className="text-gray-300 hover:text-indigo-600 mr-1 p-1.5 rounded hover:bg-indigo-50 transition-colors"><Pencil size={14} /></button>
