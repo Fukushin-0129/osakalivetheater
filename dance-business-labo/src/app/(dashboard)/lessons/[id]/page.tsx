@@ -46,6 +46,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [copyingFromPrevious, setCopyingFromPrevious] = useState(false)
 
   useEffect(() => { loadAll() }, [lessonId])
 
@@ -279,6 +280,28 @@ ${planSummary || '（未設定）'}`
   const hasPlan = planItems.length > 0
 
   return (
+
+  async function copyFromPreviousWeek() {
+    if (!lesson) return
+    setCopyingFromPrevious(true)
+    try {
+      const res = await fetch(`/api/lessons/${lesson.id}/copy-curriculum`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        alert(`エラー: ${error.error}`)
+        return
+      }
+      const data = await res.json()
+      alert(`✅ ${data.copied_from} からカリキュラムをコピーしました（${data.items_count}項目）`)
+      loadAll()
+    } catch (error) {
+      alert(`エラー: ${error instanceof Error ? error.message : '不明なエラー'}`)
+    } finally {
+      setCopyingFromPrevious(false)
+    }
+  }
     <div>
       {/* ヘッダー */}
       <div className="flex items-center gap-3 mb-5">
@@ -318,6 +341,13 @@ ${planSummary || '（未設定）'}`
                       <div className="px-4 py-6 text-center text-gray-400 text-xs">
                         <p>計画項目がありません</p>
                         <button onClick={() => setPlanEditMode(true)} className="mt-2 text-indigo-500 hover:text-indigo-700 underline">項目を追加する</button>
+                        <button 
+                          onClick={copyFromPreviousWeek}
+                          disabled={copyingFromPrevious}
+                          className="mt-2 block mx-auto text-amber-600 hover:text-amber-700 disabled:text-gray-300 underline"
+                        >
+                          {copyingFromPrevious ? 'コピー中...' : '前週のカリキュラムをコピー'}
+                        </button>
                       </div>
                     ) : (
                       <div>
