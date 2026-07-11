@@ -146,7 +146,8 @@ export default function StudentsPage() {
 
   function onCropImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const { width, height } = e.currentTarget
-    const c = centerCrop(makeAspectCrop({ unit: '%', width: 80 }, 1, width, height), width, height)
+    // 全身写真も入るよう、初期候補は縦長(3:4)にする（ドラッグで自由に調整可）
+    const c = centerCrop(makeAspectCrop({ unit: '%', width: 90 }, 3 / 4, width, height), width, height)
     setCrop(c)
   }
 
