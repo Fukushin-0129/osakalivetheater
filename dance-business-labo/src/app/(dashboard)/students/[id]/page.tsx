@@ -144,9 +144,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       <div className="grid md:grid-cols-[280px_1fr] gap-4 mb-4">
         <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col items-center justify-center">
           {avatarSignedUrl ? (
-            <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-square rounded-xl object-cover shadow-sm" />
+            <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[3/4] rounded-xl object-contain bg-gray-50 shadow-sm" />
           ) : (
-            <div className="w-full aspect-square rounded-xl bg-gray-100 flex items-center justify-center text-gray-300 text-7xl font-bold">
+            <div className="w-full aspect-[3/4] rounded-xl bg-gray-100 flex items-center justify-center text-gray-300 text-7xl font-bold">
               {student.name?.charAt(0) ?? '?'}
             </div>
           )}
