@@ -3,7 +3,7 @@
 import { useEffect, useState, use, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType, CurriculumItem, LessonPlanItem, LessonEvaluation, Student } from '@/types/database'
-import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X, GripVertical } from 'lucide-react'
 import Link from 'next/link'
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
@@ -51,8 +51,19 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [copyingFromPrevious, setCopyingFromPrevious] = useState(false)
+  // 計画編集モードでの並び替え（ドラッグ＆ドロップ）
+  const [grabbedId, setGrabbedId] = useState<string | null>(null)
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [dragBefore, setDragBefore] = useState(false)
+  const dragCounter = useRef(0)
 
   useEffect(() => { loadAll() }, [lessonId])
+  useEffect(() => {
+    const onMouseUp = () => setGrabbedId(null)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => window.removeEventListener('mouseup', onMouseUp)
+  }, [])
 
   async function loadAll() {
     setLoading(true)
@@ -64,7 +75,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
       { data: evalData },
     ] = await Promise.all([
       supabase.from('lessons').select('*, lesson_types(*)').eq('id', lessonId).single(),
-      supabase.from('curriculum_items').select('*').order('level').order('display_order'),
+      supabase.from('curriculum_items').select('*').order('display_order').order('created_at'),
       supabase.from('lesson_plan_items').select('*, curriculum_items(*)').eq('lesson_id', lessonId),
       supabase.from('attendance').select('student_id, students(*)').eq('lesson_id', lessonId).in('status', ['present', 'late']),
       supabase.from('lesson_evaluations').select('*').eq('lesson_id', lessonId),
@@ -316,6 +327,40 @@ ${planSummary || '（未設定）'}`
     setChatLoading(false)
   }
 
+  // 計画編集モードでの並び替え（カリキュラム全体の display_order を更新するので /curriculum の並びにも反映される）
+  function onDragStart(e: React.DragEvent, id: string) {
+    setDraggedId(id)
+    e.dataTransfer.effectAllowed = 'move'
+    setTimeout(() => { (e.target as HTMLElement).style.opacity = '0.4' }, 0)
+  }
+  function onDragEnd(e: React.DragEvent) {
+    ;(e.target as HTMLElement).style.opacity = '1'
+    setDraggedId(null); setDragOverId(null); setGrabbedId(null); dragCounter.current = 0
+  }
+  function onDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId(id)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    setDragBefore(e.clientY < rect.top + rect.height / 2)
+  }
+  function onDragLeave() { dragCounter.current--; if (dragCounter.current <= 0) { setDragOverId(null); dragCounter.current = 0 } }
+  function onDragEnter() { dragCounter.current++ }
+  async function onDrop(e: React.DragEvent, targetId: string, siblings: CurriculumItem[]) {
+    e.preventDefault()
+    const fromId = draggedId
+    setDraggedId(null); setDragOverId(null); setGrabbedId(null); dragCounter.current = 0
+    if (!fromId || fromId === targetId) return
+    const fromIdx = siblings.findIndex(s => s.id === fromId)
+    const toIdx = siblings.findIndex(s => s.id === targetId)
+    if (fromIdx === -1 || toIdx === -1) return
+    const reordered = [...siblings]
+    const [moved] = reordered.splice(fromIdx, 1)
+    let insertAt = dragBefore ? toIdx : toIdx + 1
+    if (fromIdx < toIdx) insertAt--
+    reordered.splice(insertAt, 0, moved)
+    await Promise.all(reordered.map((item, idx) => supabase.from('curriculum_items').update({ display_order: idx + 1 }).eq('id', item.id)))
+    loadAll()
+  }
+
   async function addCurriculumItem() {
     if (!newItemName.trim() || !newItemParent) return
     await supabase.from('curriculum_items').insert({
@@ -544,8 +589,18 @@ ${planSummary || '（未設定）'}`
                         {expandedItems.has(root.id) && (
                           <div className="border-b border-gray-100">
                             {(root.children ?? []).map(mid => (
-                              <div key={mid.id}>
+                              <div key={mid.id}
+                                draggable={grabbedId === mid.id}
+                                onDragStart={e => onDragStart(e, mid.id)}
+                                onDragEnd={onDragEnd}
+                                onDragOver={e => onDragOver(e, mid.id)}
+                                onDragEnter={onDragEnter}
+                                onDragLeave={onDragLeave}
+                                onDrop={e => onDrop(e, mid.id, root.children ?? [])}
+                                className={`${dragOverId === mid.id ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''} ${draggedId === mid.id ? 'opacity-40' : ''}`}>
                                 <div className="flex items-center gap-2 px-4 py-2 bg-gray-50/60 border-b border-gray-50">
+                                  <span className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-400 flex-shrink-0"
+                                    onMouseDown={() => setGrabbedId(mid.id)}><GripVertical size={12} /></span>
                                   <button onClick={() => togglePlanItem(mid)}
                                     className={`w-4 h-4 rounded flex-shrink-0 border-2 transition-colors flex items-center justify-center ${planItemIds.has(mid.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 hover:border-indigo-400'}`}>
                                     {planItemIds.has(mid.id) && <span className="text-white text-[10px] font-bold">✓</span>}
@@ -553,7 +608,17 @@ ${planSummary || '（未設定）'}`
                                   <span className="text-xs font-medium text-gray-700">{mid.name}</span>
                                 </div>
                                 {(mid.children ?? []).map(small => (
-                                  <div key={small.id} className="flex items-center gap-2 pl-9 pr-4 py-2 border-b border-gray-50">
+                                  <div key={small.id}
+                                    draggable={grabbedId === small.id}
+                                    onDragStart={e => { e.stopPropagation(); onDragStart(e, small.id) }}
+                                    onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
+                                    onDragOver={e => { e.stopPropagation(); onDragOver(e, small.id) }}
+                                    onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
+                                    onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
+                                    onDrop={e => { e.stopPropagation(); onDrop(e, small.id, mid.children ?? []) }}
+                                    className={`flex items-center gap-2 pl-9 pr-4 py-2 border-b border-gray-50 ${dragOverId === small.id ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''} ${draggedId === small.id ? 'opacity-40' : ''}`}>
+                                    <span className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-400 flex-shrink-0"
+                                      onMouseDown={() => setGrabbedId(small.id)}><GripVertical size={11} /></span>
                                     <button onClick={() => togglePlanItem(small)}
                                       className={`w-3.5 h-3.5 rounded flex-shrink-0 border-2 transition-colors flex items-center justify-center ${planItemIds.has(small.id) ? 'bg-indigo-500 border-indigo-500' : 'border-gray-300 hover:border-indigo-400'}`}>
                                       {planItemIds.has(small.id) && <span className="text-white text-[8px] font-bold">✓</span>}
