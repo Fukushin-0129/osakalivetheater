@@ -228,11 +228,22 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
     if (lesson) {
       const lessonDate = parseJST(lesson.scheduled_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
+      const recordDate = lesson.scheduled_at.slice(0, 10)
+      const headerPrefix = `【レッスン評価: ${lessonDate} ${lesson.title}】`
+
+      // 同じ日・同じレッスンのカルテ記録は上書きするため、既存分を先に取得
+      const { data: existingRecords } = await supabase
+        .from('student_records')
+        .select('id, student_id, content')
+        .eq('record_date', recordDate)
+        .in('student_id', attendingStudents.map(a => a.student_id))
+
       for (const att of attendingStudents) {
         const studentId = att.student_id
         const studentEvals = evalMap[studentId]
+        const existing = (existingRecords ?? []).find(r => r.student_id === studentId && r.content.startsWith(headerPrefix))
         if (!studentEvals) continue
-        const lines: string[] = [`【レッスン評価: ${lessonDate} ${lesson.title}】`]
+        const lines: string[] = [headerPrefix]
         for (const planItem of planItems) {
           const item = planItem.curriculum_items as CurriculumItem | null
           if (!item) continue
@@ -245,9 +256,16 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
           lines.push(`● ${label}: ${val.notes}`)
         }
         if (lines.length > 1) {
-          await supabase.from('student_records').insert({
-            student_id: studentId, record_date: lesson.scheduled_at.slice(0, 10), content: lines.join('\n'),
-          })
+          if (existing) {
+            await supabase.from('student_records').update({ content: lines.join('\n') }).eq('id', existing.id)
+          } else {
+            await supabase.from('student_records').insert({
+              student_id: studentId, record_date: recordDate, content: lines.join('\n'),
+            })
+          }
+        } else if (existing) {
+          // 評価メモが全て削除された場合は、以前作成したカルテ記録も削除
+          await supabase.from('student_records').delete().eq('id', existing.id)
         }
       }
 
