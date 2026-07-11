@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import StudentKarteSection from '@/components/StudentKarteSection'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -204,21 +205,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           )}
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <h2 className="font-semibold text-gray-700 mb-3">カルテ</h2>
-          {!records || records.length === 0 ? (
-            <p className="text-gray-400 text-sm">記録なし</p>
-          ) : (
-            <ul className="space-y-3 text-sm">
-              {records.map(r => (
-                <li key={r.id}>
-                  <div className="text-xs text-gray-400 mb-1">{r.record_date}</div>
-                  <div className="text-gray-700 whitespace-pre-wrap">{r.content}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <StudentKarteSection studentId={id} initialRecords={records ?? []} />
       </div>
     </div>
   )
