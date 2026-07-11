@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { messages, lessonContext } = await req.json()
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY?.trim() })
 
     const systemPrompt = `あなたはタップダンス教室の先生をサポートするAIアシスタントです。
 
