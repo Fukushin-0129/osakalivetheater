@@ -15,7 +15,7 @@ function parseJST(s: string): Date {
   return new Date(y, m - 1, d, h, min)
 }
 
-type AttendingStudent = { student_id: string; students: Student | null }
+type AttendingStudent = { student_id: string; students: Student | null; notes: string | null }
 type EvalMap = Record<string, Record<string, { rating: number; notes: string }>>
 
 export default function LessonDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,6 +27,8 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [planItems, setPlanItems] = useState<LessonPlanItem[]>([])
   const [attendingStudents, setAttendingStudents] = useState<AttendingStudent[]>([])
   const [evalMap, setEvalMap] = useState<EvalMap>({})
+  const [overallNotes, setOverallNotes] = useState<Record<string, string>>({}) // 生徒ごとのレッスン全体の所感
+  const [editingOverallNote, setEditingOverallNote] = useState<string | null>(null) // studentId
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -77,7 +79,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
       supabase.from('lessons').select('*, lesson_types(*)').eq('id', lessonId).single(),
       supabase.from('curriculum_items').select('*').order('display_order').order('created_at'),
       supabase.from('lesson_plan_items').select('*, curriculum_items(*)').eq('lesson_id', lessonId),
-      supabase.from('attendance').select('student_id, students(*)').eq('lesson_id', lessonId).in('status', ['present', 'late']),
+      supabase.from('attendance').select('student_id, notes, students(*)').eq('lesson_id', lessonId).in('status', ['present', 'late']),
       supabase.from('lesson_evaluations').select('*').eq('lesson_id', lessonId),
     ])
 
@@ -118,6 +120,11 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
     setPlanItems(resolvedPlanItems)
     setAttendingStudents((attendData ?? []) as any)
+    const overallMap: Record<string, string> = {}
+    for (const att of (attendData ?? []) as any[]) {
+      if (att.notes) overallMap[att.student_id] = att.notes
+    }
+    setOverallNotes(overallMap)
 
     const map: EvalMap = {}
     for (const e of evalData ?? []) {
@@ -210,6 +217,10 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     }))
   }
 
+  function setOverallNote(studentId: string, value: string) {
+    setOverallNotes(prev => ({ ...prev, [studentId]: value }))
+  }
+
   async function saveEvaluations() {
     setSaving(true)
     const rows = []
@@ -238,16 +249,26 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
         .eq('record_date', recordDate)
         .in('student_id', attendingStudents.map(a => a.student_id))
 
+      // 全体の所感を attendance.notes に保存
+      for (const att of attendingStudents) {
+        const overall = overallNotes[att.student_id] ?? ''
+        if (overall !== (att.notes ?? '')) {
+          await supabase.from('attendance').update({ notes: overall || null })
+            .eq('lesson_id', lessonId).eq('student_id', att.student_id)
+        }
+      }
+
       for (const att of attendingStudents) {
         const studentId = att.student_id
         const studentEvals = evalMap[studentId]
         const existing = (existingRecords ?? []).find(r => r.student_id === studentId && r.content.startsWith(headerPrefix))
-        if (!studentEvals) continue
+        const overallNote = overallNotes[studentId]?.trim()
         const lines: string[] = [headerPrefix]
+        if (overallNote) lines.push(`◆ 全体の所感: ${overallNote}`)
         for (const planItem of planItems) {
           const item = planItem.curriculum_items as CurriculumItem | null
           if (!item) continue
-          const val = studentEvals[item.id]
+          const val = studentEvals?.[item.id]
           if (!val?.notes) continue
           const parentName = item.parent_id
             ? curriculumTree.flatMap(r => r.children ?? []).find(c => c.id === item.parent_id)?.name ?? ''
@@ -715,6 +736,34 @@ ${planSummary || '（未設定）'}`
                       <div key={att.student_id} className="w-36 flex-shrink-0 px-2 py-2.5 text-center border-l border-gray-100">
                         <span className="text-xs font-semibold text-gray-800">{att.students?.name ?? '—'}</span>
                         {att.students?.name_kana && <div className="text-[10px] text-gray-400">{att.students.name_kana}</div>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* レッスン全体の所感 */}
+                  <div className="flex items-stretch border-b-2 border-amber-100 bg-amber-50/30">
+                    <div className="w-48 flex-shrink-0 px-4 py-3">
+                      <span className="text-sm font-semibold text-amber-700">レッスン全体の所感</span>
+                    </div>
+                    {attendingStudents.map(att => (
+                      <div key={att.student_id} className="w-36 flex-shrink-0 px-2 py-3 border-l border-amber-100">
+                        {editingOverallNote === att.student_id ? (
+                          <textarea
+                            defaultValue={overallNotes[att.student_id] ?? ''}
+                            onCompositionStart={() => { composingRef.current = true }}
+                            onCompositionEnd={e => { composingRef.current = false; setOverallNote(att.student_id, (e.target as HTMLTextAreaElement).value) }}
+                            onChange={e => { if (!composingRef.current) setOverallNote(att.student_id, e.target.value) }}
+                            onBlur={() => setEditingOverallNote(null)}
+                            placeholder="今日の全体的な様子"
+                            rows={3}
+                            autoFocus
+                            className="w-full border border-amber-300 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                        ) : (
+                          <p onClick={() => setEditingOverallNote(att.student_id)}
+                            className={`text-[11px] leading-tight cursor-pointer ${overallNotes[att.student_id] ? 'text-gray-700' : 'text-gray-300'}`}>
+                            {overallNotes[att.student_id] || '+ 記入する'}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
