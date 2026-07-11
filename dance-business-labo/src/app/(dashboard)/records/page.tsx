@@ -133,7 +133,7 @@ export default function RecordsPage() {
       const item = e.curriculum_items
       const lesson = e.lessons
       if (!item) return null
-      return `[${lesson?.scheduled_at?.slice(0, 10) ?? ''}] ${item.name}: ${e.rating ? `★${e.rating}` : ''} ${e.notes ?? ''}`
+      return `[${lesson?.scheduled_at?.slice(0, 10) ?? ''}] ${item.name}: ${e.rating ? '★特筆' : ''} ${e.notes ?? ''}`
     }).filter(Boolean).join('\n')
 
     const studentContext = `生徒名: ${selectedStudent.name}
@@ -315,11 +315,7 @@ ${recentRecords || '（記録なし）'}`
                             {e.notes && <p className="text-xs text-gray-500 mt-0.5">{e.notes}</p>}
                           </div>
                           {e.rating ? (
-                            <div className="flex gap-0.5 flex-shrink-0">
-                              {[1,2,3,4,5].map(s => (
-                                <Star key={s} size={12} className={s <= e.rating! ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200'} />
-                              ))}
-                            </div>
+                            <Star size={14} className="flex-shrink-0 text-yellow-400 fill-yellow-400" />
                           ) : null}
                         </div>
                       ))}

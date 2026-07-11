@@ -653,15 +653,12 @@ ${planSummary || '（未設定）'}`
                                         <div className="flex items-center gap-3">
                                           <span className="flex-1 text-sm text-gray-700">{small.name}</span>
                                           <div className="flex items-center gap-1 flex-shrink-0">
-                                            <div className="flex gap-0.5">
-                                              {[1, 2, 3, 4, 5].map(s => (
-                                                <button key={s}
-                                                  onClick={() => setEval(att.student_id, small.id, 'rating', s === (val?.rating ?? 0) ? 0 : s)}
-                                                  className={`transition-colors ${s <= (val?.rating ?? 0) ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}>
-                                                  <Star size={18} fill={s <= (val?.rating ?? 0) ? 'currentColor' : 'none'} />
-                                                </button>
-                                              ))}
-                                            </div>
+                                            <button
+                                              onClick={() => setEval(att.student_id, small.id, 'rating', (val?.rating ?? 0) > 0 ? 0 : 1)}
+                                              className={`transition-colors ${(val?.rating ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}
+                                              title="特筆すべき点があればマーク">
+                                              <Star size={18} fill={(val?.rating ?? 0) > 0 ? 'currentColor' : 'none'} />
+                                            </button>
                                             {editingEvalNote !== `${att.student_id}:${small.id}` && (
                                               <button onClick={() => setEditingEvalNote(`${att.student_id}:${small.id}`)}
                                                 className="ml-1 text-gray-300 hover:text-indigo-400">
