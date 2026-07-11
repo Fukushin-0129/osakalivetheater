@@ -122,6 +122,7 @@ export type LessonPlanItem = {
   lesson_id: string
   curriculum_item_id: string
   plan_notes: string | null
+  actual_notes: string | null
   display_order: number
   created_at: string
   curriculum_items?: CurriculumItem

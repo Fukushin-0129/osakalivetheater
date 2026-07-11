@@ -41,6 +41,10 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   // 計画メモ・評価メモの編集中ID
   const [editingPlanNote, setEditingPlanNote] = useState<string | null>(null)
   const [editingEvalNote, setEditingEvalNote] = useState<string | null>(null) // `${studentId}:${itemId}`
+  // 実施メモ（実際に行った内容）の編集中ID・計画外項目の追加
+  const [editingActualNote, setEditingActualNote] = useState<string | null>(null) // planItemId
+  const [addingActualParent, setAddingActualParent] = useState<{ parentId: string; level: number } | null>(null)
+  const [newActualItemName, setNewActualItemName] = useState('')
   // AIチャット
   const [chatOpen, setChatOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
@@ -135,6 +139,43 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   async function updatePlanNotes(planItemId: string, notes: string) {
     await supabase.from('lesson_plan_items').update({ plan_notes: notes }).eq('id', planItemId)
     setPlanItems(prev => prev.map(p => p.id === planItemId ? { ...p, plan_notes: notes } : p))
+  }
+
+  // 実際に行った内容を記録し、カリキュラムの指導ノートにも反映（最新の内容で上書き）
+  async function updateActualNotes(planItem: LessonPlanItem, notes: string) {
+    await supabase.from('lesson_plan_items').update({ actual_notes: notes }).eq('id', planItem.id)
+    setPlanItems(prev => prev.map(p => p.id === planItem.id ? { ...p, actual_notes: notes } : p))
+    if (notes.trim()) {
+      await supabase.from('curriculum_items').update({ teaching_notes: notes }).eq('id', planItem.curriculum_item_id)
+      setCurriculumTree(prev => prev.map(root => ({
+        ...root,
+        children: (root.children ?? []).map(mid => ({
+          ...mid,
+          ...(mid.id === planItem.curriculum_item_id ? { teaching_notes: notes } : {}),
+          children: (mid.children ?? []).map(small =>
+            small.id === planItem.curriculum_item_id ? { ...small, teaching_notes: notes } : small
+          ),
+        })),
+        ...(root.id === planItem.curriculum_item_id ? { teaching_notes: notes } : {}),
+      })))
+    }
+  }
+
+  // 計画になかった項目を「実施した項目」としてカリキュラムに追加し、当該レッスンの計画にも紐づける
+  async function addActualItem() {
+    if (!newActualItemName.trim() || !addingActualParent) return
+    const { data: newItem } = await supabase.from('curriculum_items').insert({
+      parent_id: addingActualParent.parentId, name: newActualItemName.trim(),
+      level: addingActualParent.level, display_order: 99,
+    }).select().single()
+    if (newItem) {
+      await supabase.from('lesson_plan_items').insert({
+        lesson_id: lessonId, curriculum_item_id: newItem.id, display_order: planItems.length,
+      })
+    }
+    setNewActualItemName('')
+    setAddingActualParent(null)
+    loadAll()
   }
 
   function setEval(studentId: string, itemId: string, field: 'rating' | 'notes', value: string | number) {
@@ -265,22 +306,6 @@ ${planSummary || '（未設定）'}`
     loadAll()
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20 text-gray-400">
-      <Loader2 size={24} className="animate-spin mr-2" /> 読み込み中...
-    </div>
-  )
-
-  if (!lesson) return <div className="text-gray-500 p-8">レッスンが見つかりません</div>
-
-  const dt = parseJST(lesson.scheduled_at)
-  const lessonLabel = `${dt.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}（${WEEKDAYS[dt.getDay()]}）${dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} ${lesson.title}`
-
-  const hasStudents = attendingStudents.length > 0
-  const hasPlan = planItems.length > 0
-
-  return (
-
   async function copyFromPreviousWeek() {
     if (!lesson) return
     setCopyingFromPrevious(true)
@@ -302,6 +327,22 @@ ${planSummary || '（未設定）'}`
       setCopyingFromPrevious(false)
     }
   }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20 text-gray-400">
+      <Loader2 size={24} className="animate-spin mr-2" /> 読み込み中...
+    </div>
+  )
+
+  if (!lesson) return <div className="text-gray-500 p-8">レッスンが見つかりません</div>
+
+  const dt = parseJST(lesson.scheduled_at)
+  const lessonLabel = `${dt.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}（${WEEKDAYS[dt.getDay()]}）${dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} ${lesson.title}`
+
+  const hasStudents = attendingStudents.length > 0
+  const hasPlan = planItems.length > 0
+
+  return (
     <div>
       {/* ヘッダー */}
       <div className="flex items-center gap-3 mb-5">
@@ -406,9 +447,43 @@ ${planSummary || '（未設定）'}`
                                               autoFocus
                                               className="mt-1.5 w-full border border-indigo-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
                                           )}
+                                          {/* 実施メモ（実際に行った内容。カリキュラムの指導ノートにも反映） */}
+                                          {smallPlanItem && editingActualNote !== smallPlanItem.id && (
+                                            <button onClick={() => setEditingActualNote(smallPlanItem.id)}
+                                              className="mt-1 block text-left text-[11px] text-amber-600 hover:text-amber-700">
+                                              {smallPlanItem.actual_notes ? `実施: ${smallPlanItem.actual_notes}` : '+ 実施メモを記録'}
+                                            </button>
+                                          )}
+                                          {smallPlanItem && editingActualNote === smallPlanItem.id && (
+                                            <textarea
+                                              defaultValue={smallPlanItem.actual_notes ?? ''}
+                                              onCompositionStart={() => { composingRef.current = true }}
+                                              onCompositionEnd={e => { composingRef.current = false; updateActualNotes(smallPlanItem, (e.target as HTMLTextAreaElement).value) }}
+                                              onChange={e => { if (!composingRef.current) updateActualNotes(smallPlanItem, e.target.value) }}
+                                              onBlur={() => setEditingActualNote(null)}
+                                              placeholder="実際に行った内容（カリキュラムにも反映されます）"
+                                              rows={2}
+                                              autoFocus
+                                              className="mt-1.5 w-full border border-amber-300 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none" />
+                                          )}
                                         </div>
                                       )
                                     })}
+                                    {/* 計画になかった項目を実施として追加 */}
+                                    {addingActualParent?.parentId === mid.id ? (
+                                      <div className="flex items-center gap-2 pl-9 pr-4 py-2 border-b border-gray-50 bg-amber-50/40">
+                                        <input value={newActualItemName} onChange={e => setNewActualItemName(e.target.value)}
+                                          onKeyDown={e => e.key === 'Enter' && addActualItem()} placeholder="実際に行った項目名" autoFocus
+                                          className="flex-1 border border-amber-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                                        <button onClick={addActualItem} className="text-xs bg-amber-600 text-white px-2 py-1 rounded-lg">追加</button>
+                                        <button onClick={() => setAddingActualParent(null)} className="text-xs text-gray-400">×</button>
+                                      </div>
+                                    ) : (
+                                      <button onClick={() => { setAddingActualParent({ parentId: mid.id, level: 3 }); setNewActualItemName('') }}
+                                        className="flex items-center gap-1 pl-9 pr-4 py-1.5 text-[11px] text-amber-500 hover:text-amber-700 transition-colors w-full">
+                                        <Plus size={10} /> 計画外の項目を実施として追加
+                                      </button>
+                                    )}
                                   </div>
                                 )
                               })}
