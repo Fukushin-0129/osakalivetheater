@@ -232,8 +232,22 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
           })
         }
       }
+
+      // 生徒への評価コメントを指導ノートにも反映（実施メモが未入力の項目のみ。既存の実施メモは上書きしない）
+      for (const planItem of planItems) {
+        if (planItem.actual_notes && planItem.actual_notes.trim()) continue
+        const itemId = planItem.curriculum_item_id
+        const notesForItem = attendingStudents
+          .map(att => evalMap[att.student_id]?.[itemId]?.notes)
+          .filter((n): n is string => !!n && n.trim().length > 0)
+        if (notesForItem.length === 0) continue
+        const combined = [...new Set(notesForItem)].join(' / ')
+        await supabase.from('lesson_plan_items').update({ actual_notes: combined }).eq('id', planItem.id)
+        await supabase.from('curriculum_items').update({ teaching_notes: combined }).eq('id', itemId)
+      }
     }
 
+    await loadAll()
     setSaving(false)
     setSavedEval(true)
     setTimeout(() => setSavedEval(false), 3000)
