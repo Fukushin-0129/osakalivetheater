@@ -123,6 +123,7 @@ export type LessonPlanItem = {
   curriculum_item_id: string
   plan_notes: string | null
   actual_notes: string | null
+  skipped: boolean
   display_order: number
   created_at: string
   curriculum_items?: CurriculumItem

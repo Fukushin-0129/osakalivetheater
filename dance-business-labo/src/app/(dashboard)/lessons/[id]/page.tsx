@@ -161,6 +161,13 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  // 計画していたが実際には行わなかった項目を「スキップ」としてマーク（記録は残したまま評価対象から外す）
+  async function toggleSkipped(planItem: LessonPlanItem) {
+    const next = !planItem.skipped
+    await supabase.from('lesson_plan_items').update({ skipped: next }).eq('id', planItem.id)
+    setPlanItems(prev => prev.map(p => p.id === planItem.id ? { ...p, skipped: next } : p))
+  }
+
   // 計画になかった項目を「実施した項目」としてカリキュラムに追加し、当該レッスンの計画にも紐づける
   async function addActualItem() {
     if (!newActualItemName.trim() || !addingActualParent) return
@@ -438,7 +445,10 @@ ${planSummary || '（未設定）'}`
                                       return (
                                         <div key={small.id} className="pl-8 pr-4 py-2 border-b border-gray-50">
                                           <div className="flex items-center gap-1 flex-1 min-w-0">
-                                            <span className="text-xs text-gray-600">{small.name}</span>
+                                            <span className={`text-xs ${smallPlanItem?.skipped ? 'text-gray-400 line-through' : 'text-gray-600'}`}>{small.name}</span>
+                                            {smallPlanItem?.skipped && (
+                                              <span className="text-[9px] text-gray-400 bg-gray-100 px-1 rounded flex-shrink-0">未実施</span>
+                                            )}
                                             {smallPlanItem && editingPlanNote !== smallPlanItem.id && (
                                               <button onClick={() => setEditingPlanNote(smallPlanItem.id)}
                                                 className="ml-1 text-gray-300 hover:text-indigo-400 flex-shrink-0">
@@ -650,17 +660,34 @@ ${planSummary || '（未設定）'}`
                               </div>
                               {smallPlanned.map(small => {
                                 const pi = planItems.find(p => p.curriculum_item_id === small.id)
+                                const isSkipped = pi?.skipped ?? false
                                 return (
-                                  <div key={small.id} className="flex items-stretch border-t border-gray-50">
-                                    <div className="w-48 flex-shrink-0 px-4 py-3">
-                                      <span className="text-sm text-gray-700">{small.name}</span>
-                                      {pi?.plan_notes && (
-                                        <p className="text-xs text-indigo-400 mt-0.5">計画: {pi.plan_notes}</p>
-                                      )}
+                                  <div key={small.id} className={`flex items-stretch border-t border-gray-50 ${isSkipped ? 'bg-gray-50/60' : ''}`}>
+                                    <div className="w-48 flex-shrink-0 px-4 py-3 flex items-start gap-2">
+                                      <button
+                                        onClick={() => pi && toggleSkipped(pi)}
+                                        title={isSkipped ? '実施した項目に戻す' : '実際には行わなかった項目としてマーク'}
+                                        className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${isSkipped ? 'border-gray-300 bg-gray-200' : 'border-indigo-400 bg-indigo-500'}`}>
+                                        {!isSkipped && <span className="text-white text-[9px] font-bold">✓</span>}
+                                      </button>
+                                      <div className="min-w-0">
+                                        <span className={`text-sm ${isSkipped ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{small.name}</span>
+                                        {isSkipped && <p className="text-[10px] text-gray-400">未実施（計画のみ）</p>}
+                                        {pi?.plan_notes && !isSkipped && (
+                                          <p className="text-xs text-indigo-400 mt-0.5">計画: {pi.plan_notes}</p>
+                                        )}
+                                      </div>
                                     </div>
                                     {attendingStudents.map(att => {
                                       const val = evalMap[att.student_id]?.[small.id]
                                       const editKey = `${att.student_id}:${small.id}`
+                                      if (isSkipped) {
+                                        return (
+                                          <div key={att.student_id} className="w-36 flex-shrink-0 px-2 py-3 border-l border-gray-50 flex items-center justify-center">
+                                            <span className="text-[11px] text-gray-300">—</span>
+                                          </div>
+                                        )
+                                      }
                                       return (
                                         <div key={att.student_id} className="w-36 flex-shrink-0 px-2 py-3 border-l border-gray-50 flex flex-col items-center gap-1">
                                           <div className="flex items-center gap-1">
