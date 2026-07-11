@@ -613,91 +613,99 @@ ${planSummary || '（未設定）'}`
             </div>
           ) : (
             <div className="space-y-4">
-              {attendingStudents.map(att => {
-                const student = att.students
-                if (!student) return null
-                return (
-                  <div key={att.student_id} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                      <span className="font-semibold text-gray-800 text-sm">{student.name}</span>
-                      {student.name_kana && <span className="text-xs text-gray-400 ml-2">{student.name_kana}</span>}
-                    </div>
-                    <div>
-                      {curriculumTree.map(root => {
-                        const allDescendants = [
-                          ...(root.children ?? []),
-                          ...(root.children ?? []).flatMap(c => c.children ?? []),
-                        ]
-                        const rootHasPlan = planItemIds.has(root.id) || allDescendants.some(c => planItemIds.has(c.id))
-                        if (!rootHasPlan) return null
-                        return (
-                          <div key={root.id} className="border-b border-gray-100 last:border-0">
-                            <div className="px-4 py-2 bg-indigo-50/60">
-                              <span className="text-xs font-bold text-indigo-700">{root.name}</span>
-                            </div>
-                            {(root.children ?? []).map(mid => {
-                              const midChildren = mid.children ?? []
-                              const midHasPlan = planItemIds.has(mid.id) || midChildren.some(c => planItemIds.has(c.id))
-                              if (!midHasPlan) return null
-                              const smallPlanned = midChildren.filter(s => planItemIds.has(s.id))
-                              return (
-                                <div key={mid.id}>
-                                  <div className="px-4 py-2 bg-gray-50/50 border-t border-gray-100">
-                                    <span className="text-xs font-medium text-gray-600">{mid.name}</span>
-                                  </div>
-                                  {smallPlanned.map(small => {
-                                    const pi = planItems.find(p => p.curriculum_item_id === small.id)
-                                    const val = evalMap[att.student_id]?.[small.id]
-                                    return (
-                                      <div key={small.id} className="px-4 py-3 border-t border-gray-50">
-                                        <div className="flex items-center gap-3">
-                                          <span className="flex-1 text-sm text-gray-700">{small.name}</span>
-                                          <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+                <div className="min-w-max">
+                  {/* 生徒名ヘッダー（横並び） */}
+                  <div className="flex border-b border-gray-100 bg-gray-50">
+                    <div className="w-48 flex-shrink-0 px-4 py-2.5" />
+                    {attendingStudents.map(att => (
+                      <div key={att.student_id} className="w-36 flex-shrink-0 px-2 py-2.5 text-center border-l border-gray-100">
+                        <span className="text-xs font-semibold text-gray-800">{att.students?.name ?? '—'}</span>
+                        {att.students?.name_kana && <div className="text-[10px] text-gray-400">{att.students.name_kana}</div>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {curriculumTree.map(root => {
+                    const allDescendants = [
+                      ...(root.children ?? []),
+                      ...(root.children ?? []).flatMap(c => c.children ?? []),
+                    ]
+                    const rootHasPlan = planItemIds.has(root.id) || allDescendants.some(c => planItemIds.has(c.id))
+                    if (!rootHasPlan) return null
+                    return (
+                      <div key={root.id} className="border-b border-gray-100 last:border-0">
+                        <div className="px-4 py-2 bg-indigo-50/60">
+                          <span className="text-xs font-bold text-indigo-700">{root.name}</span>
+                        </div>
+                        {(root.children ?? []).map(mid => {
+                          const midChildren = mid.children ?? []
+                          const midHasPlan = planItemIds.has(mid.id) || midChildren.some(c => planItemIds.has(c.id))
+                          if (!midHasPlan) return null
+                          const smallPlanned = midChildren.filter(s => planItemIds.has(s.id))
+                          return (
+                            <div key={mid.id}>
+                              <div className="px-4 py-2 bg-gray-50/50 border-t border-gray-100">
+                                <span className="text-xs font-medium text-gray-600">{mid.name}</span>
+                              </div>
+                              {smallPlanned.map(small => {
+                                const pi = planItems.find(p => p.curriculum_item_id === small.id)
+                                return (
+                                  <div key={small.id} className="flex items-stretch border-t border-gray-50">
+                                    <div className="w-48 flex-shrink-0 px-4 py-3">
+                                      <span className="text-sm text-gray-700">{small.name}</span>
+                                      {pi?.plan_notes && (
+                                        <p className="text-xs text-indigo-400 mt-0.5">計画: {pi.plan_notes}</p>
+                                      )}
+                                    </div>
+                                    {attendingStudents.map(att => {
+                                      const val = evalMap[att.student_id]?.[small.id]
+                                      const editKey = `${att.student_id}:${small.id}`
+                                      return (
+                                        <div key={att.student_id} className="w-36 flex-shrink-0 px-2 py-3 border-l border-gray-50 flex flex-col items-center gap-1">
+                                          <div className="flex items-center gap-1">
                                             <button
                                               onClick={() => setEval(att.student_id, small.id, 'rating', (val?.rating ?? 0) > 0 ? 0 : 1)}
                                               className={`transition-colors ${(val?.rating ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-200 hover:text-yellow-300'}`}
                                               title="特筆すべき点があればマーク">
                                               <Star size={18} fill={(val?.rating ?? 0) > 0 ? 'currentColor' : 'none'} />
                                             </button>
-                                            {editingEvalNote !== `${att.student_id}:${small.id}` && (
-                                              <button onClick={() => setEditingEvalNote(`${att.student_id}:${small.id}`)}
-                                                className="ml-1 text-gray-300 hover:text-indigo-400">
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                            {editingEvalNote !== editKey && (
+                                              <button onClick={() => setEditingEvalNote(editKey)}
+                                                className="text-gray-300 hover:text-indigo-400">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                               </button>
                                             )}
                                           </div>
+                                          {val?.notes && editingEvalNote !== editKey && (
+                                            <p className="text-[11px] text-gray-600 text-center cursor-pointer leading-tight" onClick={() => setEditingEvalNote(editKey)}>{val.notes}</p>
+                                          )}
+                                          {editingEvalNote === editKey && (
+                                            <textarea
+                                              defaultValue={val?.notes ?? ''}
+                                              onCompositionStart={() => { composingRef.current = true }}
+                                              onCompositionEnd={e => { composingRef.current = false; setEval(att.student_id, small.id, 'notes', (e.target as HTMLTextAreaElement).value) }}
+                                              onChange={e => { if (!composingRef.current) setEval(att.student_id, small.id, 'notes', e.target.value) }}
+                                              onBlur={() => setEditingEvalNote(null)}
+                                              placeholder="メモ"
+                                              rows={2}
+                                              autoFocus
+                                              className="w-full border border-indigo-300 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                                          )}
                                         </div>
-                                        {pi?.plan_notes && (
-                                          <p className="text-xs text-indigo-400 mt-0.5">計画: {pi.plan_notes}</p>
-                                        )}
-                                        {val?.notes && editingEvalNote !== `${att.student_id}:${small.id}` && (
-                                          <p className="text-xs text-gray-600 mt-1 cursor-pointer" onClick={() => setEditingEvalNote(`${att.student_id}:${small.id}`)}>{val.notes}</p>
-                                        )}
-                                        {editingEvalNote === `${att.student_id}:${small.id}` && (
-                                          <textarea
-                                            defaultValue={val?.notes ?? ''}
-                                            onCompositionStart={() => { composingRef.current = true }}
-                                            onCompositionEnd={e => { composingRef.current = false; setEval(att.student_id, small.id, 'notes', (e.target as HTMLTextAreaElement).value) }}
-                                            onChange={e => { if (!composingRef.current) setEval(att.student_id, small.id, 'notes', e.target.value) }}
-                                            onBlur={() => setEditingEvalNote(null)}
-                                            placeholder="メモ（生徒と共有されます）"
-                                            rows={2}
-                                            autoFocus
-                                            className="mt-1 w-full border border-indigo-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                                        )}
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
+                                      )
+                                    })}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
 
               <div className="flex justify-end pb-4">
                 <button onClick={saveEvaluations} disabled={saving}
