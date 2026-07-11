@@ -34,6 +34,8 @@ export default function RecordsPage() {
   // 編集中
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState('')
+  // レッスン評価（項目ごとのメモ）の編集中
+  const [editingEvalId, setEditingEvalId] = useState<string | null>(null)
 
   // AIチャット
   const [chatOpen, setChatOpen] = useState(false)
@@ -105,6 +107,17 @@ export default function RecordsPage() {
     await supabase.from('student_records').update({ content: editContent.trim() }).eq('id', id)
     setRecords(prev => prev.map(r => r.id === id ? { ...r, content: editContent.trim() } : r))
     setEditingId(null)
+  }
+
+  async function updateEval(id: string, field: 'notes' | 'rating', value: string | number) {
+    await supabase.from('lesson_evaluations').update({ [field]: value || null }).eq('id', id)
+    setEvals(prev => prev.map(e => e.id === id ? { ...e, [field]: value } as EvalWithContext : e))
+  }
+
+  async function deleteEval(id: string) {
+    if (!confirm('この評価項目を削除しますか？')) return
+    await supabase.from('lesson_evaluations').delete().eq('id', id)
+    setEvals(prev => prev.filter(e => e.id !== id))
   }
 
   async function saveGoal() {
@@ -309,14 +322,36 @@ ${recentRecords || '（記録なし）'}`
                     </div>
                     <div className="space-y-2">
                       {item.evals.filter(e => e.rating || e.notes).map(e => (
-                        <div key={e.id} className="flex items-start gap-3 pl-2">
+                        <div key={e.id} className="flex items-start gap-3 pl-2 group/eval">
                           <div className="flex-1 min-w-0">
                             <span className="text-xs font-medium text-gray-700">{e.curriculum_items?.name ?? '—'}</span>
-                            {e.notes && <p className="text-xs text-gray-500 mt-0.5">{e.notes}</p>}
+                            {editingEvalId === e.id ? (
+                              <textarea
+                                defaultValue={e.notes ?? ''}
+                                onCompositionStart={() => { composingRef.current = true }}
+                                onCompositionEnd={ev => { composingRef.current = false; updateEval(e.id, 'notes', (ev.target as HTMLTextAreaElement).value) }}
+                                onChange={ev => { if (!composingRef.current) updateEval(e.id, 'notes', ev.target.value) }}
+                                onBlur={() => setEditingEvalId(null)}
+                                rows={2}
+                                autoFocus
+                                className="mt-1 w-full border border-indigo-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+                            ) : (
+                              e.notes && (
+                                <p className="text-xs text-gray-500 mt-0.5 cursor-pointer" onClick={() => setEditingEvalId(e.id)}>{e.notes}</p>
+                              )
+                            )}
                           </div>
-                          {e.rating ? (
-                            <Star size={14} className="flex-shrink-0 text-yellow-400 fill-yellow-400" />
-                          ) : null}
+                          <button
+                            onClick={() => updateEval(e.id, 'rating', e.rating ? 0 : 1)}
+                            className="flex-shrink-0 transition-colors" title="特筆すべき点があればマーク">
+                            <Star size={14} className={e.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200 hover:text-yellow-300'} />
+                          </button>
+                          <div className="flex-shrink-0 flex gap-0.5 opacity-0 group-hover/eval:opacity-100 transition-opacity">
+                            {editingEvalId !== e.id && (
+                              <button onClick={() => setEditingEvalId(e.id)} className="p-1 text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 rounded"><Pencil size={11} /></button>
+                            )}
+                            <button onClick={() => deleteEval(e.id)} className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 size={11} /></button>
+                          </div>
                         </div>
                       ))}
                     </div>
