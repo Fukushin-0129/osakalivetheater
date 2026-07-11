@@ -49,6 +49,7 @@ export default function StudentsPage() {
   const [cropSrc, setCropSrc] = useState<string | null>(null)
   const [crop, setCrop] = useState<Crop>()
   const [cropFileName, setCropFileName] = useState('')
+  const [originalDataUrl, setOriginalDataUrl] = useState<string | null>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const supabase = createClient()
 
@@ -139,13 +140,23 @@ export default function StudentsPage() {
     if (!file) return
     setCropFileName(file.name)
     const reader = new FileReader()
-    reader.onload = () => setCropSrc(reader.result as string)
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      // 取り込んだ画像はそのまま使用する（トリミングは任意で後から選択）
+      setOriginalDataUrl(dataUrl)
+      setAvatarFile(file)
+      setAvatarPreview(dataUrl)
+    }
     reader.readAsDataURL(file)
     e.target.value = ''
   }
 
+  function openCropTool() {
+    if (originalDataUrl) setCropSrc(originalDataUrl)
+  }
+
   function onCropImageLoad() {
-    // デフォルトは画像全体を選択（そのまま取り込む）。トリミングしたい場合のみドラッグで調整
+    // 切り取りツールを開いた時は、デフォルトで画像全体を選択しておく
     setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 })
   }
 
@@ -404,7 +415,7 @@ export default function StudentsPage() {
         )}
       </div>
 
-      {/* 画像クロップモーダル */}
+      {/* 画像クロップモーダル（任意：必要な部分だけ切り取りたい場合のみ使用） */}
       {cropSrc && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col gap-4 p-6">
@@ -412,9 +423,10 @@ export default function StudentsPage() {
               <h3 className="font-semibold text-gray-800">画像の範囲を調整</h3>
               <button onClick={() => setCropSrc(null)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
-            <div className="flex justify-center max-h-[60vh] overflow-auto">
+            <p className="text-xs text-gray-400 -mt-2">初期状態は画像全体が選択されています。狭めたい場合のみ枠をドラッグしてください。</p>
+            <div className="flex justify-center items-center" style={{ height: '55vh' }}>
               <ReactCrop crop={crop} onChange={c => setCrop(c)} keepSelection>
-                <img ref={imgRef} src={cropSrc} alt="crop" onLoad={onCropImageLoad} className="max-w-full max-h-[55vh] object-contain" />
+                <img ref={imgRef} src={cropSrc} alt="crop" onLoad={onCropImageLoad} style={{ maxHeight: '55vh', maxWidth: '100%', width: 'auto', height: 'auto' }} />
               </ReactCrop>
             </div>
             <div className="flex gap-3 justify-end">
@@ -444,9 +456,9 @@ export default function StudentsPage() {
               <div className="flex items-center gap-4">
                 <div className="relative">
                   {avatarPreview ? (
-                    <img src={avatarPreview} alt="avatar" className="w-32 h-32 rounded-lg object-cover border-2 border-gray-200" />
+                    <img src={avatarPreview} alt="avatar" className="w-28 h-36 rounded-lg object-contain bg-gray-50 border-2 border-gray-200" />
                   ) : (
-                    <div className="w-32 h-32 rounded-lg bg-indigo-100 flex items-center justify-center border-2 border-dashed border-indigo-300">
+                    <div className="w-28 h-36 rounded-lg bg-indigo-100 flex items-center justify-center border-2 border-dashed border-indigo-300">
                       <Camera size={32} className="text-indigo-400" />
                     </div>
                   )}
@@ -467,8 +479,13 @@ export default function StudentsPage() {
                 </div>
                 <div className="text-xs text-gray-500">
                   <p className="font-medium text-gray-700">プロフィール画像</p>
-                  <p>JPG・PNG・GIF対応</p>
+                  <p>JPG・PNG・GIF対応・画像はそのまま取り込まれます</p>
                   {avatarFile && <p className="text-indigo-600 mt-0.5">{avatarFile.name}</p>}
+                  {originalDataUrl && (
+                    <button type="button" onClick={openCropTool} className="mt-1 text-indigo-500 hover:text-indigo-700 underline">
+                      必要な部分だけ切り取る
+                    </button>
+                  )}
                 </div>
               </div>
 
