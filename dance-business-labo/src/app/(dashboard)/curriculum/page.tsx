@@ -360,44 +360,90 @@ export default function CurriculumPage() {
                     {(mid.children ?? []).map(small => {
                       const isSmallGrabbed = grabbedId === small.id
                       const isSmallOver = dragOverId === small.id
+                      const smallBrainEditing = brainEditId === small.id
                       return (
-                        <div key={small.id}
-                          draggable={isSmallGrabbed}
-                          onDragStart={e => { e.stopPropagation(); onDragStart(e, small.id) }}
-                          onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
-                          onDragOver={e => { e.stopPropagation(); onDragOver(e, small.id) }}
-                          onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
-                          onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
-                          onDrop={e => { e.stopPropagation(); onDrop(e, small.id, mid.children as TreeItem[]) }}
-                          className={`flex items-center gap-1 pl-12 pr-3 py-1.5 border-b border-gray-50 hover:bg-gray-50/60 transition-colors ${isSmallOver ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''} ${draggedId === small.id ? 'opacity-40' : ''}`}>
-                          <span className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0"
-                            onMouseDown={() => setGrabbedId(small.id)}><GripVertical size={12} /></span>
-                          {editingId === small.id ? (
-                            <div className="flex-1 flex items-center gap-2">
-                              <input value={editName} onChange={e => setEditName(e.target.value)}
-                                onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') saveEdit(small.id); if (e.key === 'Escape') setEditingId(null) }}
-                                className="flex-1 border border-indigo-300 rounded-lg px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
-                              <button onClick={() => saveEdit(small.id)} className="text-indigo-600 p-1">
-                                {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                              </button>
-                              <button onClick={() => setEditingId(null)} className="text-gray-400 p-1"><X size={12} /></button>
+                        <div key={small.id} className="border-b border-gray-50">
+                          <div
+                            draggable={isSmallGrabbed}
+                            onDragStart={e => { e.stopPropagation(); onDragStart(e, small.id) }}
+                            onDragEnd={e => { e.stopPropagation(); onDragEnd(e) }}
+                            onDragOver={e => { e.stopPropagation(); onDragOver(e, small.id) }}
+                            onDragEnter={e => { e.stopPropagation(); onDragEnter() }}
+                            onDragLeave={e => { e.stopPropagation(); onDragLeave() }}
+                            onDrop={e => { e.stopPropagation(); onDrop(e, small.id, mid.children as TreeItem[]) }}
+                            className={`flex items-center gap-1 pl-12 pr-3 py-1.5 hover:bg-gray-50/60 transition-colors ${isSmallOver ? (dragBefore ? 'border-t-2 border-indigo-300' : 'border-b-2 border-indigo-300') : ''} ${draggedId === small.id ? 'opacity-40' : ''}`}>
+                            <span className="cursor-grab active:cursor-grabbing text-gray-200 hover:text-gray-400 flex-shrink-0"
+                              onMouseDown={() => setGrabbedId(small.id)}><GripVertical size={12} /></span>
+                            {editingId === small.id ? (
+                              <div className="flex-1 flex items-center gap-2">
+                                <input value={editName} onChange={e => setEditName(e.target.value)}
+                                  onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') saveEdit(small.id); if (e.key === 'Escape') setEditingId(null) }}
+                                  className="flex-1 border border-indigo-300 rounded-lg px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" autoFocus />
+                                <button onClick={() => saveEdit(small.id)} className="text-indigo-600 p-1">
+                                  {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                </button>
+                                <button onClick={() => setEditingId(null)} className="text-gray-400 p-1"><X size={12} /></button>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="flex-1 text-sm text-gray-600 cursor-pointer select-none"
+                                  onDoubleClick={() => { setEditingId(small.id); setEditName(small.name) }}
+                                  title="ダブルクリックで編集">{small.name}</span>
+                                {small.teaching_notes && (
+                                  <span className="text-[9px] text-indigo-400 bg-indigo-50 px-1.5 py-0.5 rounded-full flex-shrink-0">指導ノート有</span>
+                                )}
+                                {small.video_url && <VideoThumbnail url={small.video_url} />}
+                                {small.video_url && <a href={small.video_url} target="_blank" rel="noopener noreferrer"
+                                  className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50"><ExternalLink size={10} /></a>}
+                                <button onClick={() => { setVideoEditId(small.id); setVideoEditUrl(small.video_url ?? '') }}
+                                  className={`p-1 rounded hover:bg-indigo-50 ${small.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`}><Video size={10} /></button>
+                                <button onClick={() => openBrainEdit(small)}
+                                  className={`p-1 rounded hover:bg-emerald-50 ${(small.brain_effects || small.teaching_notes) ? 'text-emerald-500' : 'text-gray-200 hover:text-emerald-500'}`}
+                                  title="脳への影響・指導ノートを編集"><Brain size={10} /></button>
+                                <button onClick={() => { setEditingId(small.id); setEditName(small.name) }}
+                                  className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50"><Pencil size={10} /></button>
+                                <button onClick={() => deleteItem(small.id)}
+                                  className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={10} /></button>
+                              </>
+                            )}
+                          </div>
+                          {smallBrainEditing ? (
+                            <div className="pl-12 pr-3 pb-2.5 space-y-2">
+                              <div>
+                                <label className="block text-xs font-semibold text-emerald-700 mb-1">脳への影響</label>
+                                <textarea value={brainEditEffects} onChange={e => setBrainEditEffects(e.target.value)} rows={3}
+                                  className="w-full border border-emerald-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none" />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-semibold text-indigo-700 mb-1">指導ノート（進め方の提案）</label>
+                                <textarea value={brainEditNotes} onChange={e => setBrainEditNotes(e.target.value)} rows={3}
+                                  className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => setBrainEditId(null)}
+                                  className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50">キャンセル</button>
+                                <button onClick={() => saveBrainEdit(small.id)} disabled={saving}
+                                  className="flex items-center gap-1 text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+                                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} 保存
+                                </button>
+                              </div>
                             </div>
-                          ) : (
-                            <>
-                              <span className="flex-1 text-sm text-gray-600 cursor-pointer select-none"
-                                onDoubleClick={() => { setEditingId(small.id); setEditName(small.name) }}
-                                title="ダブルクリックで編集">{small.name}</span>
-                              {small.video_url && <VideoThumbnail url={small.video_url} />}
-                              {small.video_url && <a href={small.video_url} target="_blank" rel="noopener noreferrer"
-                                className="text-indigo-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50"><ExternalLink size={10} /></a>}
-                              <button onClick={() => { setVideoEditId(small.id); setVideoEditUrl(small.video_url ?? '') }}
-                                className={`p-1 rounded hover:bg-indigo-50 ${small.video_url ? 'text-indigo-400' : 'text-gray-200 hover:text-indigo-500'}`}><Video size={10} /></button>
-                              <button onClick={() => { setEditingId(small.id); setEditName(small.name) }}
-                                className="text-gray-200 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50"><Pencil size={10} /></button>
-                              <button onClick={() => deleteItem(small.id)}
-                                className="text-gray-200 hover:text-red-500 p-1 rounded hover:bg-red-50"><Trash2 size={10} /></button>
-                            </>
-                          )}
+                          ) : (small.brain_effects || small.teaching_notes) ? (
+                            <div className="pl-12 pr-3 pb-2 space-y-1">
+                              {small.brain_effects && (
+                                <div>
+                                  <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide">脳への影響</span>
+                                  <p className="text-xs text-gray-600 leading-relaxed mt-0.5">{small.brain_effects}</p>
+                                </div>
+                              )}
+                              {small.teaching_notes && (
+                                <div>
+                                  <span className="text-[10px] font-semibold text-indigo-500 uppercase tracking-wide">指導ノート</span>
+                                  <p className="text-xs text-gray-600 leading-relaxed mt-0.5">{small.teaching_notes}</p>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       )
                     })}
