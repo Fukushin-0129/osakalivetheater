@@ -141,46 +141,47 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         </span>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4 mb-4">
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <h2 className="font-semibold text-gray-700 mb-3">基本情報</h2>
-          <div className="flex gap-4">
-            <div className="flex-shrink-0">
-              {avatarSignedUrl ? (
-                <img src={avatarSignedUrl} alt={student.name} className="w-32 h-32 rounded-xl object-cover shadow-sm" />
-              ) : (
-                <div className="w-32 h-32 rounded-xl bg-gray-100 flex items-center justify-center text-gray-300 text-4xl font-bold">
-                  {student.name?.charAt(0) ?? '?'}
-                </div>
-              )}
+      <div className="grid md:grid-cols-[280px_1fr] gap-4 mb-4">
+        <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col items-center justify-center">
+          {avatarSignedUrl ? (
+            <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-square rounded-xl object-cover shadow-sm" />
+          ) : (
+            <div className="w-full aspect-square rounded-xl bg-gray-100 flex items-center justify-center text-gray-300 text-7xl font-bold">
+              {student.name?.charAt(0) ?? '?'}
             </div>
-            <dl className="space-y-2 text-sm flex-1 min-w-0">
-              {[
-                ['よみがな', student.name_kana],
-                ['参加者ID', student.legacy_id != null ? `#${student.legacy_id}` : null],
-                ['メール', student.email],
-                ['電話番号', student.phone],
-                ['生年月日', student.birthdate],
-                ['体験レッスン日', student.joined_at ? new Date(student.joined_at).toLocaleDateString('ja-JP') : null],
-                ['郵便番号', student.postal_code],
-                ['住所', [student.address1, student.address2, student.address3].filter(Boolean).join(' ') || student.address],
-                ['緊急連絡先', student.emergency_contact],
-              ].map(([label, value]) => value && (
-                <div key={label as string} className="flex gap-2">
-                  <dt className="text-gray-400 w-28 flex-shrink-0">{label}</dt>
-                  <dd className="text-gray-700">{value}</dd>
-                </div>
-              ))}
-              {student.notes && (
-                <div className="flex gap-2">
-                  <dt className="text-gray-400 w-28 flex-shrink-0">備考</dt>
-                  <dd className="text-gray-700 whitespace-pre-wrap">{student.notes}</dd>
-                </div>
-              )}
-            </dl>
-          </div>
+          )}
         </div>
 
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <h2 className="font-semibold text-gray-700 mb-3">基本情報</h2>
+          <dl className="space-y-2 text-sm">
+            {[
+              ['よみがな', student.name_kana],
+              ['参加者ID', student.legacy_id != null ? `#${student.legacy_id}` : null],
+              ['メール', student.email],
+              ['電話番号', student.phone],
+              ['生年月日', student.birthdate],
+              ['体験レッスン日', student.joined_at ? new Date(student.joined_at).toLocaleDateString('ja-JP') : null],
+              ['郵便番号', student.postal_code],
+              ['住所', [student.address1, student.address2, student.address3].filter(Boolean).join(' ') || student.address],
+              ['緊急連絡先', student.emergency_contact],
+            ].map(([label, value]) => value && (
+              <div key={label as string} className="flex gap-2">
+                <dt className="text-gray-400 w-28 flex-shrink-0">{label}</dt>
+                <dd className="text-gray-700">{value}</dd>
+              </div>
+            ))}
+            {student.notes && (
+              <div className="flex gap-2">
+                <dt className="text-gray-400 w-28 flex-shrink-0">備考</dt>
+                <dd className="text-gray-700 whitespace-pre-wrap">{student.notes}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-semibold text-gray-700 mb-3">チケット残数</h2>
           {!tickets || tickets.length === 0 ? (
@@ -196,9 +197,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             </ul>
           )}
         </div>
-      </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-semibold text-gray-700 mb-3">
             出席履歴
@@ -212,9 +211,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             <AttendanceList records={attendanceRecords} />
           )}
         </div>
-
-        <StudentKarteSection studentId={id} initialRecords={records ?? []} />
       </div>
+
+      <StudentKarteSection studentId={id} initialRecords={records ?? []} />
     </div>
   )
 }
