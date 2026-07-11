@@ -135,9 +135,6 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     <div>
       <div className="flex items-center gap-3 mb-6">
         <Link href="/students" className="text-gray-400 hover:text-gray-600"><ArrowLeft size={20} /></Link>
-        {avatarSignedUrl && (
-          <img src={avatarSignedUrl} alt={student.name} className="w-10 h-10 rounded-lg object-cover" />
-        )}
         <h1 className="text-2xl font-bold text-gray-800">{student.name}</h1>
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${student.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
           {student.is_active ? '在籍' : '休会'}
@@ -147,30 +144,41 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-semibold text-gray-700 mb-3">基本情報</h2>
-          <dl className="space-y-2 text-sm">
-            {[
-              ['よみがな', student.name_kana],
-              ['参加者ID', student.legacy_id != null ? `#${student.legacy_id}` : null],
-              ['メール', student.email],
-              ['電話番号', student.phone],
-              ['生年月日', student.birthdate],
-              ['体験レッスン日', student.joined_at ? new Date(student.joined_at).toLocaleDateString('ja-JP') : null],
-              ['郵便番号', student.postal_code],
-              ['住所', [student.address1, student.address2, student.address3].filter(Boolean).join(' ') || student.address],
-              ['緊急連絡先', student.emergency_contact],
-            ].map(([label, value]) => value && (
-              <div key={label as string} className="flex gap-2">
-                <dt className="text-gray-400 w-28 flex-shrink-0">{label}</dt>
-                <dd className="text-gray-700">{value}</dd>
-              </div>
-            ))}
-            {student.notes && (
-              <div className="flex gap-2">
-                <dt className="text-gray-400 w-28 flex-shrink-0">備考</dt>
-                <dd className="text-gray-700 whitespace-pre-wrap">{student.notes}</dd>
-              </div>
-            )}
-          </dl>
+          <div className="flex gap-4">
+            <div className="flex-shrink-0">
+              {avatarSignedUrl ? (
+                <img src={avatarSignedUrl} alt={student.name} className="w-32 h-32 rounded-xl object-cover shadow-sm" />
+              ) : (
+                <div className="w-32 h-32 rounded-xl bg-gray-100 flex items-center justify-center text-gray-300 text-4xl font-bold">
+                  {student.name?.charAt(0) ?? '?'}
+                </div>
+              )}
+            </div>
+            <dl className="space-y-2 text-sm flex-1 min-w-0">
+              {[
+                ['よみがな', student.name_kana],
+                ['参加者ID', student.legacy_id != null ? `#${student.legacy_id}` : null],
+                ['メール', student.email],
+                ['電話番号', student.phone],
+                ['生年月日', student.birthdate],
+                ['体験レッスン日', student.joined_at ? new Date(student.joined_at).toLocaleDateString('ja-JP') : null],
+                ['郵便番号', student.postal_code],
+                ['住所', [student.address1, student.address2, student.address3].filter(Boolean).join(' ') || student.address],
+                ['緊急連絡先', student.emergency_contact],
+              ].map(([label, value]) => value && (
+                <div key={label as string} className="flex gap-2">
+                  <dt className="text-gray-400 w-28 flex-shrink-0">{label}</dt>
+                  <dd className="text-gray-700">{value}</dd>
+                </div>
+              ))}
+              {student.notes && (
+                <div className="flex gap-2">
+                  <dt className="text-gray-400 w-28 flex-shrink-0">備考</dt>
+                  <dd className="text-gray-700 whitespace-pre-wrap">{student.notes}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm p-5">
