@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Student } from '@/types/database'
 import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, X, Loader2, Camera, Check } from 'lucide-react'
 import Link from 'next/link'
-import ReactCrop, { type Crop, centerCrop, makeAspectCrop } from 'react-image-crop'
+import ReactCrop, { type Crop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 
 type FilterStatus = 'all' | 'active' | 'inactive'
@@ -144,11 +144,9 @@ export default function StudentsPage() {
     e.target.value = ''
   }
 
-  function onCropImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
-    const { width, height } = e.currentTarget
-    // 全身写真も入るよう、初期候補は縦長(3:4)にする（ドラッグで自由に調整可）
-    const c = centerCrop(makeAspectCrop({ unit: '%', width: 90 }, 3 / 4, width, height), width, height)
-    setCrop(c)
+  function onCropImageLoad() {
+    // デフォルトは画像全体を選択（そのまま取り込む）。トリミングしたい場合のみドラッグで調整
+    setCrop({ unit: '%', x: 0, y: 0, width: 100, height: 100 })
   }
 
   const confirmCrop = useCallback(() => {
