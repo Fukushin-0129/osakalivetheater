@@ -356,10 +356,10 @@ export default function StudentsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {signedAvatarMap.get(s.id) ? (
-                        <img src={signedAvatarMap.get(s.id)} alt={s.name} className="w-7 h-7 rounded object-cover flex-shrink-0" />
+                        <img src={signedAvatarMap.get(s.id)} alt={s.name} className="w-12 h-12 rounded object-contain bg-gray-50 flex-shrink-0" />
                       ) : (
-                        <div className="w-7 h-7 rounded bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-indigo-600 text-xs font-bold">{s.name.charAt(0)}</span>
+                        <div className="w-12 h-12 rounded bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-indigo-600 text-sm font-bold">{s.name.charAt(0)}</span>
                         </div>
                       )}
                       <div>
