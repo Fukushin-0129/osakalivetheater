@@ -108,7 +108,6 @@ function MultiDateCalendar({ selected, onChange }: { selected: Set<string>; onCh
 
 const initLessonForm = () => ({
   lesson_dates: new Set<string>(),
-  use_lesson_date: true,
   payment_date: new Date().toISOString().split('T')[0],
   venue: DEFAULT_VENUE,
   amount: '',
@@ -212,7 +211,8 @@ export default function FinancePage() {
     setSaving(true)
     const sortedDates = [...lessonForm.lesson_dates].sort()
     const rows = sortedDates.map(date => ({
-      transaction_date: lessonForm.use_lesson_date ? date : lessonForm.payment_date,
+      // 取引日（会計上の支払日）とレッスン日は別物として、常に両方を記録する
+      transaction_date: lessonForm.payment_date,
       type: 'expense',
       category: 'レッスン場代',
       amount: Number(lessonForm.amount),
@@ -646,37 +646,17 @@ export default function FinancePage() {
                 )}
               </div>
 
-              {/* 取引日の設定 */}
+              {/* 支払日（会計上の取引日） */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-600">取引日の設定</label>
-                <div className="flex rounded-xl border border-gray-200 overflow-hidden text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setLessonForm(f => ({ ...f, use_lesson_date: true }))}
-                    className={`flex-1 py-2 font-medium transition-colors ${lessonForm.use_lesson_date ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    レッスン日
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLessonForm(f => ({ ...f, use_lesson_date: false }))}
-                    className={`flex-1 py-2 font-medium transition-colors ${!lessonForm.use_lesson_date ? 'bg-orange-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    支払日
-                  </button>
-                </div>
-                {!lessonForm.use_lesson_date && (
-                  <input
-                    type="date"
-                    value={lessonForm.payment_date}
-                    onChange={e => setLessonForm(f => ({ ...f, payment_date: e.target.value }))}
-                    className={inputCls}
-                  />
-                )}
+                <label className="text-xs font-medium text-gray-600">支払日（実際にお金を払った日）</label>
+                <input
+                  type="date"
+                  value={lessonForm.payment_date}
+                  onChange={e => setLessonForm(f => ({ ...f, payment_date: e.target.value }))}
+                  className={inputCls}
+                />
                 <p className="text-xs text-gray-400">
-                  {lessonForm.use_lesson_date
-                    ? '各レッスン日が取引日として記録されます'
-                    : '全レッスンが同じ支払日で記録されます'}
+                  選択した全レッスンが、この支払日で1件の取引として記録されます。レッスン日は別途、各明細に保持されます。
                 </p>
               </div>
 
@@ -800,7 +780,7 @@ export default function FinancePage() {
             </div>
             <div className="px-6 py-4 space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-600">日付</label>
+                <label className="text-xs font-medium text-gray-600">{form.category === 'レッスン場代' ? '支払日（実際にお金を払った日）' : '日付'}</label>
                 <input type="date" value={form.transaction_date} onChange={e => setForm(f => ({ ...f, transaction_date: e.target.value }))} className={`mt-1 ${inputCls}`} />
               </div>
               <div>
@@ -831,6 +811,7 @@ export default function FinancePage() {
                 <div>
                   <label className="text-xs font-medium text-gray-600">レッスン日</label>
                   <input type="date" value={form.lesson_date} onChange={e => setForm(f => ({ ...f, lesson_date: e.target.value }))} className={`mt-1 ${inputCls}`} />
+                  <p className="text-xs text-gray-400 mt-1">支払日とは別に記録されます。レッスン管理の「場代から登録」で使われます。</p>
                 </div>
               )}
               <div>
