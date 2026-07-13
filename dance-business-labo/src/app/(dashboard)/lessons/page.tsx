@@ -653,18 +653,30 @@ export default function LessonsPage() {
                     <label className="text-xs font-medium text-gray-600">作成する時間帯</label>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {importTimeOptions.map(t => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => {
-                            const next = new Set(importTimes)
-                            next.has(t) ? next.delete(t) : next.add(t)
-                            setImportTimes(next)
-                          }}
-                          className={`py-2 px-3 rounded-xl text-sm font-medium transition-colors border ${importTimes.has(t) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                        >
-                          {t}〜
-                        </button>
+                        <div key={t} className={`flex items-center rounded-xl border overflow-hidden ${importTimes.has(t) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-200'}`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = new Set(importTimes)
+                              next.has(t) ? next.delete(t) : next.add(t)
+                              setImportTimes(next)
+                            }}
+                            className={`py-2 pl-3 pr-2 text-sm font-medium transition-colors ${importTimes.has(t) ? 'text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                          >
+                            {t}〜
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImportTimeOptions(prev => prev.filter(x => x !== t))
+                              setImportTimes(prev => { const next = new Set(prev); next.delete(t); return next })
+                            }}
+                            title="この時間帯を選択肢から削除"
+                            className={`p-2 transition-colors ${importTimes.has(t) ? 'text-indigo-200 hover:text-white hover:bg-indigo-700' : 'text-gray-300 hover:text-red-500 hover:bg-red-50'}`}
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
                       ))}
                     </div>
                     <div className="flex items-center gap-2 mt-2">
