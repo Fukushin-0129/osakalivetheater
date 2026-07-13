@@ -47,6 +47,8 @@ export default function LessonsPage() {
   const [importDates, setImportDates] = useState<string[]>([])
   const [importSelected, setImportSelected] = useState<Set<string>>(new Set())
   const [importTimes, setImportTimes] = useState<Set<string>>(new Set(DEFAULT_TIMES))
+  const [importTimeOptions, setImportTimeOptions] = useState<string[]>(DEFAULT_TIMES)
+  const [newImportTime, setNewImportTime] = useState('')
   const [importTitle, setImportTitle] = useState('タップダンスレッスン')
   const [loadingImport, setLoadingImport] = useState(false)
   const [editing, setEditing] = useState<Lesson | null>(null)
@@ -649,8 +651,8 @@ export default function LessonsPage() {
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600">作成する時間帯</label>
-                    <div className="flex gap-2 mt-1">
-                      {DEFAULT_TIMES.map(t => (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {importTimeOptions.map(t => (
                         <button
                           key={t}
                           type="button"
@@ -659,11 +661,31 @@ export default function LessonsPage() {
                             next.has(t) ? next.delete(t) : next.add(t)
                             setImportTimes(next)
                           }}
-                          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors border ${importTimes.has(t) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                          className={`py-2 px-3 rounded-xl text-sm font-medium transition-colors border ${importTimes.has(t) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                         >
                           {t}〜
                         </button>
                       ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="time"
+                        value={newImportTime}
+                        onChange={e => setNewImportTime(e.target.value)}
+                        className={`${inputCls} w-auto`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newImportTime || importTimeOptions.includes(newImportTime)) return
+                          setImportTimeOptions(prev => [...prev, newImportTime].sort())
+                          setImportTimes(prev => new Set([...prev, newImportTime]))
+                          setNewImportTime('')
+                        }}
+                        className="flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-xl font-medium"
+                      >
+                        <Plus size={12} /> 時間帯を追加
+                      </button>
                     </div>
                   </div>
                   <div>
