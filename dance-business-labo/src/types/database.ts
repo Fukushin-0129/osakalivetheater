@@ -180,7 +180,7 @@ export type StudentSubscription = {
   students?: Student
 }
 
-export type PaymentType = 'ticket_purchase' | 'subscription_payment' | 'manual'
+export type PaymentType = 'ticket_purchase' | 'subscription_payment' | 'trial_lesson_payment' | 'manual'
 
 export type PaymentStatus = 'pending' | 'completed' | 'failed'
 

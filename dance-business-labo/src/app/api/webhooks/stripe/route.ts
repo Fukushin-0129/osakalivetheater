@@ -8,6 +8,39 @@ const getSupabase = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
+// Stripeの決済を損益管理（transactions）にも収入として反映する。
+// Webhookは再送されることがあるため、同じ参照IDが既に記録済みなら重複登録しない。
+async function recordIncomeTransaction(
+  supabase: ReturnType<typeof getSupabase>,
+  {
+    date,
+    category,
+    amount,
+    referenceId,
+    note,
+  }: { date: string; category: string; amount: number; referenceId: string; note?: string }
+) {
+  const description = `Stripe決済${note ? `（${note}）` : ''} [ref:${referenceId}]`
+
+  const { data: existing } = await supabase
+    .from('transactions')
+    .select('id')
+    .ilike('description', `%[ref:${referenceId}]%`)
+    .limit(1)
+
+  if (existing && existing.length > 0) return
+
+  await supabase.from('transactions').insert([
+    {
+      transaction_date: date,
+      type: 'income',
+      category,
+      amount,
+      description,
+    },
+  ])
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text()
@@ -107,6 +140,37 @@ export async function POST(req: NextRequest) {
             status: 'completed',
           },
         ])
+
+        await recordIncomeTransaction(supabase, {
+          date: new Date().toISOString().split('T')[0],
+          category: 'チケット販売',
+          amount: ticketType.price,
+          referenceId: session.id,
+          note: ticketType.name,
+        })
+      }
+      // Handle trial lesson payment
+      else if (type === 'trial_lesson_payment') {
+        const amount = (session.amount_total ?? 0) / 100
+
+        await supabase.from('student_payments').insert([
+          {
+            student_id: studentId,
+            amount,
+            payment_date: new Date().toISOString().split('T')[0],
+            payment_type: 'trial_lesson_payment',
+            reference_id: session.id,
+            status: 'completed',
+          },
+        ])
+
+        await recordIncomeTransaction(supabase, {
+          date: new Date().toISOString().split('T')[0],
+          category: '体験レッスン収入',
+          amount,
+          referenceId: session.id,
+          note: '体験レッスン',
+        })
       }
       // Handle subscription start
       else if (subscriptionTypeId) {
@@ -162,6 +226,14 @@ export async function POST(req: NextRequest) {
             status: 'completed',
           },
         ])
+
+        await recordIncomeTransaction(supabase, {
+          date: new Date().toISOString().split('T')[0],
+          category: 'レッスン収入',
+          amount: subscriptionType.monthly_price,
+          referenceId: session.id,
+          note: subscriptionType.name,
+        })
       }
     }
 
@@ -179,19 +251,28 @@ export async function POST(req: NextRequest) {
         const subscriptionTypeId = subscription.metadata?.subscription_type_id
 
         if (studentId && subscriptionTypeId) {
+          const paymentDate = new Date(invoice.created * 1000).toISOString().split('T')[0]
+          const amount = invoice.amount_paid / 100 // Convert from cents
+
           // Create payment record for recurring payment
           await supabase.from('student_payments').insert([
             {
               student_id: studentId,
-              amount: invoice.amount_paid / 100, // Convert from cents
-              payment_date: new Date(invoice.created * 1000)
-                .toISOString()
-                .split('T')[0],
+              amount,
+              payment_date: paymentDate,
               payment_type: 'subscription_payment',
               reference_id: invoice.id,
               status: 'completed',
             },
           ])
+
+          await recordIncomeTransaction(supabase, {
+            date: paymentDate,
+            category: 'レッスン収入',
+            amount,
+            referenceId: invoice.id,
+            note: '月謝（自動更新）',
+          })
 
           // Update next payment date
           await supabase
