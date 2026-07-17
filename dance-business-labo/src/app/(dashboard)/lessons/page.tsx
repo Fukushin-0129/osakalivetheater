@@ -151,11 +151,15 @@ export default function LessonsPage() {
   async function openImport() {
     setLoadingImport(true)
     setShowImportModal(true)
+    // レッスン場代の取引は過去分も含めて件数が多く、Supabaseのデフォルト上限（1000件）に
+    // 引っかかると新しく追加した分が欠落するため、明示的に上限を引き上げて全件取得する
     const { data: txData } = await supabase
       .from('transactions')
       .select('description')
       .eq('category', 'レッスン場代')
       .not('description', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(5000)
 
     const lessonDates = new Set<string>()
     for (const tx of txData ?? []) {
