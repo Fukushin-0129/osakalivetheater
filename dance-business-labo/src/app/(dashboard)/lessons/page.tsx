@@ -151,26 +151,22 @@ export default function LessonsPage() {
   async function openImport() {
     setLoadingImport(true)
     setShowImportModal(true)
-    // レッスン場代の取引は過去分も含めて件数が多く、Supabaseのデフォルト上限（1000件）に
-    // 引っかかると新しく追加した分が欠落するため、明示的に上限を引き上げて全件取得する
+    const today = todayStr()
+    // lesson_date は専用カラムなのでDB側で今日以降に絞り込める（過去の大量データを読み込まずに済む）
     const { data: txData } = await supabase
       .from('transactions')
-      .select('description')
+      .select('lesson_date')
       .eq('category', 'レッスン場代')
-      .not('description', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(5000)
+      .gte('lesson_date', today)
 
     const lessonDates = new Set<string>()
     for (const tx of txData ?? []) {
-      const m = (tx.description as string).match(/レッスン日:\s*(\d{4}-\d{2}-\d{2})/)
-      if (m) lessonDates.add(m[1])
+      if (tx.lesson_date) lessonDates.add(tx.lesson_date as string)
     }
 
     const existingDates = new Set(lessons.map(l => l.scheduled_at.slice(0, 10)))
-    const today = todayStr()
     const unregistered = [...lessonDates]
-      .filter(d => d >= today && !existingDates.has(d))
+      .filter(d => !existingDates.has(d))
       .sort()
 
     setImportDates(unregistered)

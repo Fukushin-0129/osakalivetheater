@@ -199,7 +199,12 @@ export default function FinancePage() {
     const description = form.category === 'レッスン場代' && form.lesson_date
       ? `${form.description || DEFAULT_VENUE}（レッスン日: ${form.lesson_date}）`
       : form.description
-    await supabase.from('transactions').insert({ ...form, amount: Number(form.amount), description, lesson_date: undefined })
+    await supabase.from('transactions').insert({
+      ...form,
+      amount: Number(form.amount),
+      description,
+      lesson_date: form.category === 'レッスン場代' && form.lesson_date ? form.lesson_date : null,
+    })
     setSaving(false)
     setShowModal(false)
     load()
@@ -217,6 +222,7 @@ export default function FinancePage() {
       category: 'レッスン場代',
       amount: Number(lessonForm.amount),
       description: `${lessonForm.venue}（レッスン日: ${date}）`,
+      lesson_date: date,
     }))
     await supabase.from('transactions').insert(rows)
     setSaving(false)
