@@ -95,28 +95,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     }
     setCurriculumTree(roots)
 
-    let resolvedPlanItems = (planData ?? []) as LessonPlanItem[]
-
-    if (resolvedPlanItems.length === 0 && lessonData) {
-      const { data: prevLesson } = await supabase
-        .from('lessons').select('id').eq('title', (lessonData as any).title)
-        .lt('scheduled_at', (lessonData as any).scheduled_at)
-        .order('scheduled_at', { ascending: false }).limit(1).single()
-
-      if (prevLesson) {
-        const { data: prevPlan } = await supabase
-          .from('lesson_plan_items').select('curriculum_item_id, plan_notes, display_order').eq('lesson_id', prevLesson.id)
-        if (prevPlan && prevPlan.length > 0) {
-          const rows = prevPlan.map((p, i) => ({
-            lesson_id: lessonId, curriculum_item_id: p.curriculum_item_id,
-            plan_notes: p.plan_notes, display_order: p.display_order ?? i,
-          }))
-          await supabase.from('lesson_plan_items').insert(rows)
-          const { data: newPlan } = await supabase.from('lesson_plan_items').select('*, curriculum_items(*)').eq('lesson_id', lessonId)
-          resolvedPlanItems = (newPlan ?? []) as LessonPlanItem[]
-        }
-      }
-    }
+    const resolvedPlanItems = (planData ?? []) as LessonPlanItem[]
 
     setPlanItems(resolvedPlanItems)
     setAttendingStudents((attendData ?? []) as any)
@@ -413,6 +392,7 @@ ${planSummary || '（未設定）'}`
 
   async function copyFromPreviousWeek() {
     if (!lesson) return
+    if (!window.confirm('前週の同じ時間のレッスンからカリキュラムをコピーします。よろしいですか？')) return
     setCopyingFromPrevious(true)
     try {
       const res = await fetch(`/api/lessons/${lesson.id}/copy-curriculum`, {
