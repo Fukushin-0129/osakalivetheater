@@ -17,6 +17,7 @@ export type Student = {
   joined_at: string | null
   avatar_url: string | null
   goal: string | null
+  qr_token: string
   created_at: string
   updated_at: string
 }

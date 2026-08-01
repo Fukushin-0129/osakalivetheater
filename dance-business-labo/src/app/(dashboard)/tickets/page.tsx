@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { TicketType, StudentTicket, Student } from '@/types/database'
-import { Plus, Pencil, Trash2, Ticket, AlertTriangle, CheckCircle, Clock, Search, X, Loader2 } from 'lucide-react'
+import type { TicketType, StudentTicket, Student, StudentPayment } from '@/types/database'
+import { Plus, Pencil, Trash2, Ticket, AlertTriangle, CheckCircle, Clock, Search, X, Loader2, JapaneseYen } from 'lucide-react'
 
 type Tab = 'issued' | 'types'
 
@@ -38,6 +38,8 @@ export default function TicketsPage() {
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([])
   const [studentTickets, setStudentTickets] = useState<StudentTicket[]>([])
   const [students, setStudents] = useState<Student[]>([])
+  const [pendingPayments, setPendingPayments] = useState<StudentPayment[]>([])
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -60,18 +62,33 @@ export default function TicketsPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: tt }, { data: st }, { data: s }] = await Promise.all([
+    const [{ data: tt }, { data: st }, { data: s }, { data: pp }] = await Promise.all([
       supabase.from('ticket_types').select('*').order('price'),
       supabase.from('student_tickets').select('*, students(name, name_kana), ticket_types(name)').order('expires_at'),
       supabase.from('students').select('*').eq('is_active', true).order('name_kana'),
+      supabase.from('student_payments').select('*, students(name, name_kana)')
+        .eq('payment_type', 'ticket_purchase').eq('status', 'pending')
+        .order('payment_date', { ascending: false }),
     ])
     setTicketTypes(tt ?? [])
     setStudentTickets(st ?? [])
     setStudents(s ?? [])
+    setPendingPayments(pp ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  async function confirmPayment(id: string) {
+    setConfirmingId(id)
+    await fetch(`/api/dashboard/payments/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed' }),
+    })
+    setConfirmingId(null)
+    load()
+  }
 
   // 統計
   const stats = useMemo(() => {
@@ -185,6 +202,37 @@ export default function TicketsPage() {
           </button>
         </div>
       </div>
+
+      {/* 入金確認待ち（スタンプカード4回達成分など） */}
+      {pendingPayments.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-5">
+          <h2 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
+            <JapaneseYen size={16} /> 入金確認待ち（{pendingPayments.length}件）
+          </h2>
+          <ul className="space-y-2">
+            {pendingPayments.map(p => {
+              const student = p.students as unknown as { name: string; name_kana: string } | null
+              return (
+                <li key={p.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-800">{student?.name}</span>
+                    <span className="text-gray-400 ml-2">¥{p.amount.toLocaleString()}</span>
+                    {p.notes && <span className="text-gray-400 ml-2 text-xs">{p.notes}</span>}
+                  </div>
+                  <button
+                    onClick={() => confirmPayment(p.id)}
+                    disabled={confirmingId === p.id}
+                    className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white px-3 py-1.5 rounded-lg text-xs font-medium"
+                  >
+                    {confirmingId === p.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                    入金確認
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* 統計カード */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">

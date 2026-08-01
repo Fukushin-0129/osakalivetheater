@@ -37,6 +37,13 @@ export async function GET(
   }
 }
 
+const PAYMENT_TYPE_CATEGORY: Record<string, string> = {
+  ticket_purchase: 'チケット販売',
+  subscription_payment: 'レッスン収入',
+  trial_lesson_payment: '体験レッスン収入',
+  manual: 'その他収入',
+}
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -46,6 +53,12 @@ export async function PUT(
     const supabase = getSupabase()
     const body = await req.json()
     const { status, amount, notes } = body
+
+    const { data: before } = await supabase
+      .from('student_payments')
+      .select('*, students(name)')
+      .eq('id', id)
+      .single()
 
     const { data, error } = await supabase
       .from('student_payments')
@@ -60,7 +73,34 @@ export async function PUT(
 
     if (error) throw error
 
-    return NextResponse.json({ data: data?.[0] })
+    const payment = data?.[0]
+
+    // 入金確認（pending → completed）のタイミングで損益管理（transactions）へ収入を計上する。
+    if (payment && before && before.status !== 'completed' && payment.status === 'completed') {
+      const category = PAYMENT_TYPE_CATEGORY[payment.payment_type] ?? 'その他収入'
+      const studentName = (before.students as { name: string } | null)?.name ?? ''
+      const description = `${category}${studentName ? `（${studentName}）` : ''} [ref:${payment.id}]`
+
+      const { data: existing } = await supabase
+        .from('transactions')
+        .select('id')
+        .ilike('description', `%[ref:${payment.id}]%`)
+        .limit(1)
+
+      if (!existing || existing.length === 0) {
+        await supabase.from('transactions').insert([
+          {
+            transaction_date: payment.payment_date,
+            type: 'income',
+            category,
+            amount: payment.amount,
+            description,
+          },
+        ])
+      }
+    }
+
+    return NextResponse.json({ data: payment })
   } catch (error) {
     console.error('Error updating payment:', error)
     return NextResponse.json(
