@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, Student, Attendance } from '@/types/database'
-import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X, ArrowLeftRight, Plus, Trash2, Pencil } from 'lucide-react'
+import { ClipboardCheck, UserCheck, UserX, Clock, Ban, CheckCheck, Loader2, ChevronLeft, ChevronRight, JapaneseYen, Check, X, ArrowLeftRight, Plus, Trash2, Pencil, QrCode } from 'lucide-react'
 
 const STATUS_OPTIONS = [
   { value: 'present',     label: '出席',       icon: UserCheck, active: 'bg-green-500 text-white',   inactive: 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600' },
@@ -47,6 +48,7 @@ export default function AttendancePage() {
   const [attendance, setAttendance] = useState<Record<string, Attendance>>({})
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [cardCompletedMsg, setCardCompletedMsg] = useState<string | null>(null)
 
   // 現金入力UI状態（開閉・入力中の値のみ。保存済みはsavedCashに分離）
   const [cashOpen, setCashOpen] = useState<Record<string, boolean>>({})
@@ -156,12 +158,33 @@ export default function AttendancePage() {
   function goPrev() { if (currentIndex > 0) setSelectedLesson(lessons[currentIndex - 1].id) }
   function goNext() { if (currentIndex < lessons.length - 1) setSelectedLesson(lessons[currentIndex + 1].id) }
 
+  // 出席が新たに「出席」になった生徒のスタンプ（回数券）を1回分消化する。
+  // 4回目に到達したら次のカードを自動発行し、入金確認待ちを登録する。
+  async function consumeTicket(studentId: string, studentName: string) {
+    const lessonData = lessons.find(l => l.id === selectedLesson)
+    const lessonDate = lessonData ? lessonData.scheduled_at.slice(0, 10) : new Date().toISOString().slice(0, 10)
+    try {
+      const res = await fetch('/api/dashboard/tickets/consume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId, lesson_date: lessonDate }),
+      })
+      const result = await res.json()
+      if (result.cardCompleted) {
+        setCardCompletedMsg(`🎫 ${studentName}さん：4回スタンプ達成！5000円をお預かりして「チケット」ページで入金確認をしてください。`)
+      }
+    } catch {
+      // ネットワークエラー等はスタンプ消化を諦めて出席記録自体は残す
+    }
+  }
+
   async function setStatus(studentId: string, status: StatusValue) {
     if (!selectedLesson) return
     // 振替ボタンはモーダルで設定するためここでは処理しない
     if (status === 'substituted') { openSubModal(studentId); return }
     setSavingId(studentId)
     const existing = attendance[studentId]
+    const becomingPresent = status === 'present' && existing?.status !== 'present'
     if (existing) {
       if (existing.status === status) {
         await supabase.from('attendance').delete().eq('id', existing.id)
@@ -173,6 +196,10 @@ export default function AttendancePage() {
     } else {
       const { data } = await supabase.from('attendance').insert({ lesson_id: selectedLesson, student_id: studentId, status }).select().single()
       if (data) setAttendance(prev => ({ ...prev, [studentId]: data }))
+    }
+    if (becomingPresent) {
+      const studentName = students.find(s => s.id === studentId)?.name ?? ''
+      await consumeTicket(studentId, studentName)
     }
     setSavingId(null)
   }
@@ -338,12 +365,17 @@ export default function AttendancePage() {
 
   async function markAllPresent() {
     if (!selectedLesson || !confirm(`全員（${students.length}名）を出席にしますか？`)) return
+    const newlyPresentIds = students.filter(s => attendance[s.id]?.status !== 'present').map(s => s.id)
     const upserts = students.map(s => ({ lesson_id: selectedLesson, student_id: s.id, status: 'present' as StatusValue }))
     await supabase.from('attendance').upsert(upserts, { onConflict: 'lesson_id,student_id' })
     const { data } = await supabase.from('attendance').select('*').eq('lesson_id', selectedLesson)
     const map: Record<string, Attendance> = {}
     for (const a of data ?? []) map[a.student_id] = a
     setAttendance(map)
+    for (const studentId of newlyPresentIds) {
+      const studentName = students.find(s => s.id === studentId)?.name ?? ''
+      await consumeTicket(studentId, studentName)
+    }
   }
 
   const selectedLessonData = useMemo(() => lessons.find(l => l.id === selectedLesson), [lessons, selectedLesson])
@@ -377,15 +409,28 @@ export default function AttendancePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">出席管理</h1>
-          <p className="text-gray-500 text-sm mt-0.5">レッスンを選んで出席を記録</p>
+          <p className="text-gray-500 text-sm mt-0.5">レッスンを選んで出席を記録（手動スタンプ）</p>
         </div>
-        {selectedLesson && students.length > 0 && (
-          <button onClick={markAllPresent}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors">
-            <CheckCheck size={15} /> 全員出席
-          </button>
-        )}
+        <div className="flex gap-2">
+          <Link href="/attendance/checkin"
+            className="flex items-center gap-2 border border-indigo-600 text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded-xl text-sm font-medium transition-colors">
+            <QrCode size={15} /> QRチェックイン
+          </Link>
+          {selectedLesson && students.length > 0 && (
+            <button onClick={markAllPresent}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors">
+              <CheckCheck size={15} /> 全員出席
+            </button>
+          )}
+        </div>
       </div>
+
+      {cardCompletedMsg && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-3 mb-4 text-sm flex items-center justify-between gap-3">
+          <span>{cardCompletedMsg}</span>
+          <button onClick={() => setCardCompletedMsg(null)} className="text-amber-500 hover:text-amber-700 flex-shrink-0"><X size={16} /></button>
+        </div>
+      )}
 
       {/* レッスン選択 + 前後ナビ */}
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4">

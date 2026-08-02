@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import StudentKarteSection from '@/components/StudentKarteSection'
+import StudentQrCode from '@/components/StudentQrCode'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -139,6 +140,9 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${student.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
           {student.is_active ? '在籍' : '休会'}
         </span>
+        <div className="ml-auto">
+          <StudentQrCode studentName={student.name} qrToken={student.qr_token} />
+        </div>
       </div>
 
       <div className="grid md:grid-cols-[280px_1fr] gap-4 mb-4">
