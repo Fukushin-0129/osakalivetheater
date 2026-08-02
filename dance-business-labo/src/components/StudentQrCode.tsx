@@ -16,7 +16,10 @@ export default function StudentQrCode({
 
   useEffect(() => {
     if (!open) return
-    QRCode.toDataURL(qrToken, { width: 280, margin: 2 }).then(setDataUrl)
+    // トークンだけを埋め込むとスマホのカメラで読んだときに検索結果などへ飛んでしまうため、
+    // チェックイン画面のURLとして埋め込む。アプリ内スキャナはURLからトークンを取り出す。
+    const checkinUrl = `${window.location.origin}/attendance/checkin?token=${encodeURIComponent(qrToken)}`
+    QRCode.toDataURL(checkinUrl, { width: 280, margin: 2 }).then(setDataUrl)
   }, [open, qrToken])
 
   function printCard() {

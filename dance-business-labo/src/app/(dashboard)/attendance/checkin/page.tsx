@@ -20,6 +20,16 @@ function formatLesson(l: Lesson) {
 
 type ScanResult = { type: 'success' | 'duplicate' | 'error'; message: string }
 
+// QRコードにはチェックイン画面のURL（?token=...）を埋め込んでいる。
+// トークンだけを埋め込んでいた頃に印刷したカードも読めるよう、両方を受け付ける。
+function extractToken(scanned: string): string {
+  try {
+    return new URL(scanned).searchParams.get('token') ?? ''
+  } catch {
+    return scanned
+  }
+}
+
 export default function CheckinPage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [students, setStudents] = useState<Student[]>([])
@@ -79,8 +89,13 @@ export default function CheckinPage() {
 
   useEffect(() => () => stopCamera(), [stopCamera])
 
-  async function handleToken(token: string) {
+  async function handleToken(scanned: string) {
     if (!selectedLesson) return
+    const token = extractToken(scanned)
+    if (!token) {
+      setLastResult({ type: 'error', message: '未登録のQRコードです' })
+      return
+    }
     if (cooldownRef.current.has(token)) return
     cooldownRef.current.add(token)
     setTimeout(() => cooldownRef.current.delete(token), 4000)
