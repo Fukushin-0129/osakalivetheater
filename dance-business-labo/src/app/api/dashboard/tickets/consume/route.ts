@@ -1,18 +1,21 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-
-const getSupabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 
 // 出席が「出席」になった際に呼ぶ。スタンプカード（回数券）を1回分消化し、
 // 4回目（total_countに到達）なら次のカードを自動発行して入金確認待ちの
 // student_payments を作成する。月謝（サブスク）中の生徒は対象外。
+//
+// ログイン中のユーザーのセッション（cookie）で接続する。student_tickets の
+// RLS は authenticated ロールに許可されているため、画面と同じ権限で読み書きできる。
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabase()
+    const supabase = await createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+
     const body = await req.json()
     const { student_id, lesson_date } = body
 
@@ -32,11 +35,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ consumed: false, reason: 'has_active_subscription' })
     }
 
-    const { data: allTickets } = await supabase
+    const { data: allTickets, error: ticketsError } = await supabase
       .from('student_tickets')
       .select('*')
       .eq('student_id', student_id)
       .order('expires_at')
+
+    // 権限不足で空が返ると「チケットが無い」と誤判定してしまうため、明示的に失敗させる。
+    if (ticketsError) throw ticketsError
 
     const tickets = (allTickets || []).filter(
       (t) => t.used_count < t.total_count && (!t.expires_at || new Date(t.expires_at) >= new Date())
@@ -49,12 +55,16 @@ export async function POST(req: NextRequest) {
     const ticket = tickets[0]
     const newUsedCount = ticket.used_count + 1
 
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from('student_tickets')
       .update({ used_count: newUsedCount })
       .eq('id', ticket.id)
+      .select()
 
     if (updateError) throw updateError
+    if (!updated || updated.length === 0) {
+      throw new Error(`consume: ticket ${ticket.id} was not updated`)
+    }
 
     let cardCompleted = false
     let pendingPaymentId: string | null = null
@@ -108,6 +118,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ consumed: true, cardCompleted, pendingPaymentId })
   } catch (error) {
     console.error('Error consuming ticket:', error)
-    return NextResponse.json({ error: 'Failed to consume ticket' }, { status: 500 })
+    const detail = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: 'Failed to consume ticket', detail }, { status: 500 })
   }
 }
