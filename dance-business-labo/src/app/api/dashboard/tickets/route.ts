@@ -1,15 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/supabase/require-staff'
 import { NextRequest, NextResponse } from 'next/server'
 
-const getSupabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const supabase = getSupabase()
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
 
     const { data: ticketTypes, error } = await supabase
       .from('ticket_types')
@@ -32,7 +29,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabase()
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
+
     const body = await req.json()
     const { name, total_count, price, valid_days } = body
 

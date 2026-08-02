@@ -1,26 +1,40 @@
 import { stripe } from '@/lib/stripe'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-
-const getSupabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { ticket_type_id, student_id } = body
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
 
-    if (!ticket_type_id || !student_id) {
+    const body = await req.json()
+    const { ticket_type_id } = body
+
+    if (!ticket_type_id) {
       return NextResponse.json(
-        { error: 'ticket_type_id and student_id are required' },
+        { error: 'ticket_type_id is required' },
         { status: 400 }
       )
     }
 
-    const supabase = getSupabase()
+    // student_id はリクエストボディからではなく、ログイン中のセッション（メール）から
+    // 特定する。クライアントが指定したIDを信用すると、他の生徒になりすませてしまう。
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select('id, email')
+      .eq('email', user.email ?? '')
+      .single()
+
+    if (studentError || !student) {
+      return NextResponse.json(
+        { error: 'Student not found' },
+        { status: 404 }
+      )
+    }
+    const student_id = student.id
 
     // Get ticket type
     const { data: ticketType, error: ticketError } = await supabase
@@ -32,20 +46,6 @@ export async function POST(req: NextRequest) {
     if (ticketError || !ticketType) {
       return NextResponse.json(
         { error: 'Ticket type not found' },
-        { status: 404 }
-      )
-    }
-
-    // Get student
-    const { data: student, error: studentError } = await supabase
-      .from('students')
-      .select('email')
-      .eq('id', student_id)
-      .single()
-
-    if (studentError || !student) {
-      return NextResponse.json(
-        { error: 'Student not found' },
         { status: 404 }
       )
     }

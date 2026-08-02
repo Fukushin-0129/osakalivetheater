@@ -1,19 +1,17 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/supabase/require-staff'
 import { NextRequest, NextResponse } from 'next/server'
-
-const getSupabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
+
     const { id } = await params
-    const supabase = getSupabase()
     const { data, error } = await supabase
       .from('subscription_types')
       .select('*')
@@ -37,8 +35,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
+
     const { id } = await params
-    const supabase = getSupabase()
     const body = await req.json()
     const { name, monthly_price, max_lessons_per_month } = body
 
@@ -69,8 +70,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
+
     const { id } = await params
-    const supabase = getSupabase()
     const { error } = await supabase
       .from('subscription_types')
       .delete()

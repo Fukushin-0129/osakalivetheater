@@ -18,7 +18,22 @@ function formatLesson(l: Lesson) {
   return parseJST(l.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }) + ' ' + l.title
 }
 
+function todayStr() {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+}
+
 type ScanResult = { type: 'success' | 'duplicate' | 'error'; message: string }
+
+// QRコードにはチェックイン画面のURL（?token=...）を埋め込んでいる。
+// トークンだけを埋め込んでいた頃に印刷したカードも読めるよう、両方を受け付ける。
+function extractToken(scanned: string): string {
+  try {
+    return new URL(scanned).searchParams.get('token') ?? ''
+  } catch {
+    return scanned
+  }
+}
 
 export default function CheckinPage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
@@ -28,7 +43,9 @@ export default function CheckinPage() {
   const [scanning, setScanning] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<ScanResult | null>(null)
+  const [flash, setFlash] = useState<ScanResult['type'] | null>(null)
   const [loading, setLoading] = useState(true)
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -39,10 +56,17 @@ export default function CheckinPage() {
   const supabase = createClient()
 
   useEffect(() => {
+    // scheduled_at はレッスン作成フォームがタイムゾーンなしの文字列で保存しているため、
+    // 実際に格納される瞬時は表示上の日付と1日ずれ得る。他の画面（レッスン一覧など）と
+    // 同様に、文字列の日付部分（先頭10文字）で「今日」を判定する。UTCの範囲比較だけで絞り込むと、
+    // 表示上は今日のレッスンでも範囲外になり「本日のレッスンが登録されていません」となってしまう。
+    // ただし全件取得は行の上限に引っかかるため、前後1日分の余裕を持たせた範囲でDB側は絞り込む。
+    const today = todayStr()
     const from = new Date()
+    from.setDate(from.getDate() - 1)
     from.setHours(0, 0, 0, 0)
     const to = new Date()
-    to.setDate(to.getDate() + 1)
+    to.setDate(to.getDate() + 2)
     to.setHours(0, 0, 0, 0)
 
     Promise.all([
@@ -52,7 +76,7 @@ export default function CheckinPage() {
         .order('scheduled_at', { ascending: true }),
       supabase.from('students').select('*').eq('is_active', true),
     ]).then(([{ data: l }, { data: s }]) => {
-      const ls = l ?? []
+      const ls = (l ?? []).filter(lesson => lesson.scheduled_at.slice(0, 10) === today)
       setLessons(ls)
       setStudents(s ?? [])
       if (ls.length > 0) setSelectedLesson(ls[0].id)
@@ -78,20 +102,38 @@ export default function CheckinPage() {
   }, [])
 
   useEffect(() => () => stopCamera(), [stopCamera])
+  useEffect(() => () => { if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current) }, [])
 
-  async function handleToken(token: string) {
+  // カメラ映像の枠自体を一瞬光らせて振動させる。結果メッセージは映像の下（枠外）にしか
+  // 出ないため、カメラをかざしている最中は視界に入らず「読み取れたのか」が分かりにくかった。
+  function announceResult(result: ScanResult) {
+    setLastResult(result)
+    setFlash(result.type)
+    if (navigator.vibrate) {
+      navigator.vibrate(result.type === 'success' ? 80 : [60, 80, 60])
+    }
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+    flashTimeoutRef.current = setTimeout(() => setFlash(null), 700)
+  }
+
+  async function handleToken(scanned: string) {
     if (!selectedLesson) return
+    const token = extractToken(scanned)
+    if (!token) {
+      announceResult({ type: 'error', message: '未登録のQRコードです' })
+      return
+    }
     if (cooldownRef.current.has(token)) return
     cooldownRef.current.add(token)
     setTimeout(() => cooldownRef.current.delete(token), 4000)
 
     const student = students.find(s => s.qr_token === token)
     if (!student) {
-      setLastResult({ type: 'error', message: '未登録のQRコードです' })
+      announceResult({ type: 'error', message: '未登録のQRコードです' })
       return
     }
     if (attendance[student.id]?.status === 'present') {
-      setLastResult({ type: 'duplicate', message: `${student.name}さんは既にチェックイン済みです` })
+      announceResult({ type: 'duplicate', message: `${student.name}さんは既にチェックイン済みです` })
       return
     }
 
@@ -121,7 +163,7 @@ export default function CheckinPage() {
       // 出席登録はできているのでチケット消化の失敗は無視
     }
 
-    setLastResult({ type: 'success', message: `${student.name}さん チェックイン完了 ${cardCompletedMsg}` })
+    announceResult({ type: 'success', message: `${student.name}さん チェックイン完了 ${cardCompletedMsg}` })
   }
 
   async function startCamera() {
@@ -192,6 +234,15 @@ export default function CheckinPage() {
             <div className="text-center text-gray-400 p-6">
               <Camera size={28} className="mx-auto mb-2 opacity-50" />
               <p className="text-sm">カメラを起動してQRコードを読み取ります</p>
+            </div>
+          )}
+          {flash && (
+            <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity ${
+              flash === 'success' ? 'bg-green-500/40' : flash === 'duplicate' ? 'bg-amber-500/40' : 'bg-red-500/40'
+            }`}>
+              {flash === 'success'
+                ? <CheckCircle2 size={64} className="text-white drop-shadow" />
+                : <AlertTriangle size={64} className="text-white drop-shadow" />}
             </div>
           )}
         </div>

@@ -1,15 +1,13 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/supabase/require-staff'
 import { NextRequest, NextResponse } from 'next/server'
-
-const getSupabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = getSupabase()
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
+
     const searchParams = req.nextUrl.searchParams
     const isActive = searchParams.get('is_active')
 
