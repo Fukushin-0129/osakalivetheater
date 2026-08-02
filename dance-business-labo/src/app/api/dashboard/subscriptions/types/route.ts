@@ -1,16 +1,13 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/supabase/require-staff'
 import { NextRequest, NextResponse } from 'next/server'
-import { SubscriptionType } from '@/types/database'
-
-const getSupabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 
 export async function GET() {
   try {
-    const supabase = getSupabase()
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
+
     const { data, error } = await supabase
       .from('subscription_types')
       .select('*')
@@ -30,7 +27,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabase()
+    const supabase = await createClient()
+    const staffError = await requireStaff(supabase)
+    if (staffError) return staffError
+
     const body = await req.json()
     const { name, monthly_price, max_lessons_per_month } = body
 

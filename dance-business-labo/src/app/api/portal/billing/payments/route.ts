@@ -1,30 +1,21 @@
-import { createClient } from '@supabase/supabase-js'
-import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 
-const getSupabase = () =>
-  createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const supabase = getSupabase()
-
-    // Get student email from query param
-    const userEmail = req.nextUrl.searchParams.get('email')
-    if (!userEmail) {
-      return NextResponse.json(
-        { error: 'email parameter required' },
-        { status: 400 }
-      )
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
 
-    // Get student
+    // 生徒の特定はログイン中のセッション（メール）から行う。以前はクエリパラメータの
+    // emailをそのまま信用しており、任意のメールアドレスを指定するだけで
+    // 他人の支払い履歴を閲覧できてしまっていた。
     const { data: student, error: studentError } = await supabase
       .from('students')
       .select('id')
-      .eq('email', userEmail)
+      .eq('email', user.email ?? '')
       .single()
 
     if (studentError || !student) {
