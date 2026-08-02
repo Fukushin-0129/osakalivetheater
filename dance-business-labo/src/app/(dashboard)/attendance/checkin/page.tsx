@@ -43,7 +43,9 @@ export default function CheckinPage() {
   const [scanning, setScanning] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [lastResult, setLastResult] = useState<ScanResult | null>(null)
+  const [flash, setFlash] = useState<ScanResult['type'] | null>(null)
   const [loading, setLoading] = useState(true)
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -100,12 +102,25 @@ export default function CheckinPage() {
   }, [])
 
   useEffect(() => () => stopCamera(), [stopCamera])
+  useEffect(() => () => { if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current) }, [])
+
+  // カメラ映像の枠自体を一瞬光らせて振動させる。結果メッセージは映像の下（枠外）にしか
+  // 出ないため、カメラをかざしている最中は視界に入らず「読み取れたのか」が分かりにくかった。
+  function announceResult(result: ScanResult) {
+    setLastResult(result)
+    setFlash(result.type)
+    if (navigator.vibrate) {
+      navigator.vibrate(result.type === 'success' ? 80 : [60, 80, 60])
+    }
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+    flashTimeoutRef.current = setTimeout(() => setFlash(null), 700)
+  }
 
   async function handleToken(scanned: string) {
     if (!selectedLesson) return
     const token = extractToken(scanned)
     if (!token) {
-      setLastResult({ type: 'error', message: '未登録のQRコードです' })
+      announceResult({ type: 'error', message: '未登録のQRコードです' })
       return
     }
     if (cooldownRef.current.has(token)) return
@@ -114,11 +129,11 @@ export default function CheckinPage() {
 
     const student = students.find(s => s.qr_token === token)
     if (!student) {
-      setLastResult({ type: 'error', message: '未登録のQRコードです' })
+      announceResult({ type: 'error', message: '未登録のQRコードです' })
       return
     }
     if (attendance[student.id]?.status === 'present') {
-      setLastResult({ type: 'duplicate', message: `${student.name}さんは既にチェックイン済みです` })
+      announceResult({ type: 'duplicate', message: `${student.name}さんは既にチェックイン済みです` })
       return
     }
 
@@ -148,7 +163,7 @@ export default function CheckinPage() {
       // 出席登録はできているのでチケット消化の失敗は無視
     }
 
-    setLastResult({ type: 'success', message: `${student.name}さん チェックイン完了 ${cardCompletedMsg}` })
+    announceResult({ type: 'success', message: `${student.name}さん チェックイン完了 ${cardCompletedMsg}` })
   }
 
   async function startCamera() {
@@ -219,6 +234,15 @@ export default function CheckinPage() {
             <div className="text-center text-gray-400 p-6">
               <Camera size={28} className="mx-auto mb-2 opacity-50" />
               <p className="text-sm">カメラを起動してQRコードを読み取ります</p>
+            </div>
+          )}
+          {flash && (
+            <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity ${
+              flash === 'success' ? 'bg-green-500/40' : flash === 'duplicate' ? 'bg-amber-500/40' : 'bg-red-500/40'
+            }`}>
+              {flash === 'success'
+                ? <CheckCircle2 size={64} className="text-white drop-shadow" />
+                : <AlertTriangle size={64} className="text-white drop-shadow" />}
             </div>
           )}
         </div>
