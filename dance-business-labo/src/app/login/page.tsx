@@ -69,7 +69,7 @@ export default function LoginPage() {
         const students = await studentRes.json()
 
         if (Array.isArray(students) && students.length > 0) {
-          router.push('/student')
+          router.push('/portal')
         } else {
           router.push('/')
         }
