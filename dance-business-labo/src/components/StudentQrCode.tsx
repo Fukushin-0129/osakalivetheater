@@ -19,7 +19,9 @@ export default function StudentQrCode({
     // トークンだけを埋め込むとスマホのカメラで読んだときに検索結果などへ飛んでしまうため、
     // チェックイン画面のURLとして埋め込む。アプリ内スキャナはURLからトークンを取り出す。
     const checkinUrl = `${window.location.origin}/attendance/checkin?token=${encodeURIComponent(qrToken)}`
-    QRCode.toDataURL(checkinUrl, { width: 280, margin: 2 }).then(setDataUrl)
+    // 別の端末の画面に表示したQRを別のカメラで読む運用が多く、画面の映り込みや
+    // チラつきで読み取りに失敗しやすいため、誤り訂正レベルを最高（H）にして耐性を上げる。
+    QRCode.toDataURL(checkinUrl, { width: 280, margin: 2, errorCorrectionLevel: 'H' }).then(setDataUrl)
   }, [open, qrToken])
 
   function printCard() {
