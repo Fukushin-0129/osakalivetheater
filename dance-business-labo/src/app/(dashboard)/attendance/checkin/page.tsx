@@ -18,6 +18,11 @@ function formatLesson(l: Lesson) {
   return parseJST(l.scheduled_at).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }) + ' ' + l.title
 }
 
+function todayStr() {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+}
+
 type ScanResult = { type: 'success' | 'duplicate' | 'error'; message: string }
 
 // QRコードにはチェックイン画面のURL（?token=...）を埋め込んでいる。
@@ -49,10 +54,17 @@ export default function CheckinPage() {
   const supabase = createClient()
 
   useEffect(() => {
+    // scheduled_at はレッスン作成フォームがタイムゾーンなしの文字列で保存しているため、
+    // 実際に格納される瞬時は表示上の日付と1日ずれ得る。他の画面（レッスン一覧など）と
+    // 同様に、文字列の日付部分（先頭10文字）で「今日」を判定する。UTCの範囲比較だけで絞り込むと、
+    // 表示上は今日のレッスンでも範囲外になり「本日のレッスンが登録されていません」となってしまう。
+    // ただし全件取得は行の上限に引っかかるため、前後1日分の余裕を持たせた範囲でDB側は絞り込む。
+    const today = todayStr()
     const from = new Date()
+    from.setDate(from.getDate() - 1)
     from.setHours(0, 0, 0, 0)
     const to = new Date()
-    to.setDate(to.getDate() + 1)
+    to.setDate(to.getDate() + 2)
     to.setHours(0, 0, 0, 0)
 
     Promise.all([
@@ -62,7 +74,7 @@ export default function CheckinPage() {
         .order('scheduled_at', { ascending: true }),
       supabase.from('students').select('*').eq('is_active', true),
     ]).then(([{ data: l }, { data: s }]) => {
-      const ls = l ?? []
+      const ls = (l ?? []).filter(lesson => lesson.scheduled_at.slice(0, 10) === today)
       setLessons(ls)
       setStudents(s ?? [])
       if (ls.length > 0) setSelectedLesson(ls[0].id)
