@@ -53,7 +53,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await req.json()
-    const { status, amount, notes } = body
+    const { status, amount, notes, subsidy_amount, subsidy_received } = body
 
     const { data: before } = await supabase
       .from('student_payments')
@@ -61,14 +61,18 @@ export async function PUT(
       .eq('id', id)
       .single()
 
+    const update: Record<string, unknown> = {
+      status,
+      amount,
+      notes,
+      updated_at: new Date().toISOString(),
+    }
+    if (subsidy_amount !== undefined) update.subsidy_amount = subsidy_amount
+    if (subsidy_received !== undefined) update.subsidy_received = subsidy_received
+
     const { data, error } = await supabase
       .from('student_payments')
-      .update({
-        status,
-        amount,
-        notes,
-        updated_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq('id', id)
       .select()
 

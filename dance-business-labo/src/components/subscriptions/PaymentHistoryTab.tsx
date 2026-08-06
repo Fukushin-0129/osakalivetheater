@@ -3,14 +3,101 @@
 import { useEffect, useState } from 'react'
 import { StudentPayment, Student } from '@/types/database'
 
-export default function PaymentHistoryTab() {
-  const [payments, setPayments] = useState<(StudentPayment & { students: Student | null })[]>(
-    []
+type PaymentRow = StudentPayment & { students: Student | null }
+
+function SubsidyCell({
+  payment,
+  onUpdate,
+}: {
+  payment: PaymentRow
+  onUpdate: (id: string, patch: Partial<Pick<StudentPayment, 'subsidy_amount' | 'subsidy_received'>>) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(String(payment.subsidy_amount || ''))
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    const amount = Number(value) || 0
+    setSaving(true)
+    try {
+      await onUpdate(payment.id, { subsidy_amount: amount })
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          min="0"
+          max={payment.amount}
+          autoFocus
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && save()}
+          className="w-24 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        <button onClick={save} disabled={saving} className="text-xs text-indigo-600 hover:underline disabled:opacity-50">保存</button>
+        <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:underline">取消</button>
+      </div>
+    )
+  }
+
+  if (payment.subsidy_amount > 0) {
+    return (
+      <div className="flex items-center gap-2">
+        <button onClick={() => setEditing(true)} className="text-xs text-amber-700 hover:underline">
+          ¥{payment.subsidy_amount.toLocaleString()}充当
+        </button>
+        <button
+          onClick={() => onUpdate(payment.id, { subsidy_received: !payment.subsidy_received })}
+          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+            payment.subsidy_received
+              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+              : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+          }`}
+        >
+          {payment.subsidy_received ? '入金済み' : '入金待ち'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button onClick={() => setEditing(true)} className="text-xs text-gray-400 hover:text-indigo-600 hover:underline">
+      + クーポン充当を記録
+    </button>
   )
+}
+
+export default function PaymentHistoryTab() {
+  const [payments, setPayments] = useState<PaymentRow[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending' | 'failed'>(
     'all'
   )
+
+  const updatePayment = async (
+    id: string,
+    patch: Partial<Pick<StudentPayment, 'subsidy_amount' | 'subsidy_received'>>
+  ) => {
+    const payment = payments.find(p => p.id === id)
+    if (!payment) return
+    await fetch(`/api/dashboard/payments/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: payment.status,
+        amount: payment.amount,
+        notes: payment.notes,
+        ...patch,
+      }),
+    })
+    setPayments(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)))
+  }
 
   const fetchPayments = async () => {
     try {
@@ -75,6 +162,7 @@ export default function PaymentHistoryTab() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">支払い日</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">種別</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">ステータス</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-700">助成クーポン</th>
               </tr>
             </thead>
             <tbody>
@@ -112,6 +200,9 @@ export default function PaymentHistoryTab() {
                           ? '未払い'
                           : '失敗'}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <SubsidyCell payment={payment} onUpdate={updatePayment} />
                   </td>
                 </tr>
               ))}

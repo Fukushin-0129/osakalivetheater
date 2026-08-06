@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
       reference_id,
       status,
       notes,
+      subsidy_amount,
+      subsidy_received,
     } = body
 
     if (!student_id || !amount || !payment_date || !payment_type) {
@@ -83,6 +85,8 @@ export async function POST(req: NextRequest) {
           reference_id: reference_id || null,
           status: status || 'completed',
           notes: notes || null,
+          subsidy_amount: subsidy_amount || 0,
+          subsidy_received: subsidy_received || false,
         },
       ])
       .select()
