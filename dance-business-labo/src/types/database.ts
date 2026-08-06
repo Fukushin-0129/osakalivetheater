@@ -18,6 +18,7 @@ export type Student = {
   avatar_url: string | null
   goal: string | null
   qr_token: string
+  subsidy_program: string | null
   created_at: string
   updated_at: string
 }
@@ -195,6 +196,8 @@ export type StudentPayment = {
   reference_id: string | null
   status: PaymentStatus
   notes: string | null
+  subsidy_amount: number
+  subsidy_received: boolean
   created_at: string
   updated_at: string
   students?: Student

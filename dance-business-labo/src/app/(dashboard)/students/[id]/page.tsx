@@ -140,6 +140,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${student.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
           {student.is_active ? '在籍' : '休会'}
         </span>
+        {student.subsidy_program && (
+          <span title={student.subsidy_program} className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+            助成: {student.subsidy_program}
+          </span>
+        )}
         <div className="ml-auto">
           <StudentQrCode studentName={student.name} qrToken={student.qr_token} />
         </div>

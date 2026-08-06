@@ -17,6 +17,7 @@ const INIT_FORM = {
   emergency_contact: '', notes: '',
   legacy_id: '' as string | number,
   is_active: true,
+  subsidy_program: '',
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -110,6 +111,7 @@ export default function StudentsPage() {
       notes: s.notes ?? '',
       legacy_id: s.legacy_id ?? '',
       is_active: s.is_active,
+      subsidy_program: s.subsidy_program ?? '',
     })
     setFormError(null)
     setAvatarFile(null)
@@ -212,6 +214,7 @@ export default function StudentsPage() {
       address1: form.address1 || null,
       address2: form.address2 || null,
       address3: form.address3 || null,
+      subsidy_program: form.subsidy_program || null,
     }
 
     let studentId: string = editing?.id ?? ''
@@ -363,9 +366,16 @@ export default function StudentsPage() {
                         </div>
                       )}
                       <div>
-                        <Link href={`/students/${s.id}`} className="font-medium text-indigo-600 hover:underline">
-                          {s.name}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <Link href={`/students/${s.id}`} className="font-medium text-indigo-600 hover:underline">
+                            {s.name}
+                          </Link>
+                          {s.subsidy_program && (
+                            <span title={s.subsidy_program} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
+                              助成
+                            </span>
+                          )}
+                        </div>
                         {s.name_kana && <div className="text-xs text-gray-400 mt-0.5">{s.name_kana}</div>}
                       </div>
                     </div>
@@ -563,6 +573,17 @@ export default function StudentsPage() {
                     <option value="false">休会</option>
                   </select>
                 </Field>
+                <div className="col-span-2">
+                  <Field label="自治体の習い事助成制度（対象の場合のみ入力）">
+                    <input
+                      type="text"
+                      value={form.subsidy_program}
+                      onChange={e => setForm(f => ({ ...f, subsidy_program: e.target.value }))}
+                      placeholder="例: 吹田市子供の習い事費用助成事業"
+                      className={inputCls}
+                    />
+                  </Field>
+                </div>
 
                 {/* 郵便番号 */}
                 <div className="col-span-2">
