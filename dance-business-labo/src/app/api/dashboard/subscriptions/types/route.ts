@@ -57,9 +57,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: data?.[0] }, { status: 201 })
   } catch (error) {
     console.error('Error creating subscription type:', error)
-    const detail = error instanceof Error ? error.message : JSON.stringify(error)
     return NextResponse.json(
-      { error: 'Failed to create subscription type', detail },
+      { error: 'Failed to create subscription type' },
       { status: 500 }
     )
   }
