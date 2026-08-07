@@ -63,15 +63,11 @@ export default function StudentSubscriptionsTab() {
     setEditingSubscription(null)
   }
 
-  const handleSave = (newSub: StudentSubscription) => {
-    const subWithStudents = { ...newSub, students: null } as any
-    if (editingSubscription) {
-      setSubscriptions(
-        subscriptions.map((s) => (s.id === newSub.id ? subWithStudents : s))
-      )
-    } else {
-      setSubscriptions([...subscriptions, subWithStudents])
-    }
+  const handleSave = () => {
+    // 生徒名・プラン名は一覧側の結合(join)で取得しているため、保存直後の
+    // レスポンスだけでは持っておらず、手元でリストに継ぎ足すと「-」表示になる。
+    // 素直に一覧を取り直す。
+    fetchData()
     handleCloseModal()
   }
 
