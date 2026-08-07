@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { StudentPayment, Student } from '@/types/database'
+import NewPaymentModal from './NewPaymentModal'
 
 type PaymentRow = StudentPayment & { students: Student | null }
 
@@ -75,10 +77,12 @@ function SubsidyCell({
 
 export default function PaymentHistoryTab() {
   const [payments, setPayments] = useState<PaymentRow[]>([])
+  const [students, setStudents] = useState<Student[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending' | 'failed'>(
     'all'
   )
+  const [showNewPayment, setShowNewPayment] = useState(false)
 
   const updatePayment = async (
     id: string,
@@ -120,32 +124,48 @@ export default function PaymentHistoryTab() {
     fetchPayments()
   }, [filter])
 
+  useEffect(() => {
+    fetch('/api/students')
+      .then(res => res.json())
+      .then(result => setStudents(result.data || []))
+      .catch(() => {})
+  }, [])
+
   if (loading) {
     return <div className="text-center py-8 text-gray-500">読み込み中...</div>
   }
 
   return (
     <>
-      <div className="flex gap-2 mb-6">
-        {(['all', 'completed', 'pending', 'failed'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === f
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {f === 'all'
-              ? 'すべて'
-              : f === 'completed'
-                ? '完済'
-                : f === 'pending'
-                  ? '未払い'
-                  : '失敗'}
-          </button>
-        ))}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex gap-2">
+          {(['all', 'completed', 'pending', 'failed'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                filter === f
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {f === 'all'
+                ? 'すべて'
+                : f === 'completed'
+                  ? '完済'
+                  : f === 'pending'
+                    ? '未払い'
+                    : '失敗'}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowNewPayment(true)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium"
+        >
+          <Plus size={18} />
+          支払いを記録
+        </button>
       </div>
 
       {payments.length === 0 ? (
@@ -209,6 +229,17 @@ export default function PaymentHistoryTab() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {showNewPayment && (
+        <NewPaymentModal
+          students={students}
+          onClose={() => setShowNewPayment(false)}
+          onSaved={() => {
+            setShowNewPayment(false)
+            fetchPayments()
+          }}
+        />
       )}
     </>
   )
