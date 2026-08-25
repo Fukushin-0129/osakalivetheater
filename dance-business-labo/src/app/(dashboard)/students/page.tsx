@@ -205,38 +205,45 @@ export default function StudentsPage() {
     if (!form.name.trim()) { setFormError('名前は必須です'); return }
     setSaving(true)
     setFormError(null)
-    const payload = {
-      ...form,
-      legacy_id: form.legacy_id !== '' ? Number(form.legacy_id) : null,
-      joined_at: form.joined_at || null,
-      birthdate: form.birthdate || null,
-      postal_code: form.postal_code || null,
-      address1: form.address1 || null,
-      address2: form.address2 || null,
-      address3: form.address3 || null,
-      subsidy_program: form.subsidy_program || null,
-    }
+    try {
+      const payload = {
+        ...form,
+        legacy_id: form.legacy_id !== '' ? Number(form.legacy_id) : null,
+        joined_at: form.joined_at || null,
+        birthdate: form.birthdate || null,
+        postal_code: form.postal_code || null,
+        address1: form.address1 || null,
+        address2: form.address2 || null,
+        address3: form.address3 || null,
+        subsidy_program: form.subsidy_program || null,
+      }
 
-    let studentId: string = editing?.id ?? ''
-    if (editing) {
-      const { error } = await supabase.from('students').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing.id)
-      if (error) { setFormError(`保存に失敗しました: ${error.message}`); setSaving(false); return }
-    } else {
-      const { data, error } = await supabase.from('students').insert({ ...payload }).select('id').single()
-      if (error) { setFormError(`追加に失敗しました: ${error.message}`); setSaving(false); return }
-      studentId = data?.id ?? ''
-    }
+      let studentId: string = editing?.id ?? ''
+      if (editing) {
+        const { error } = await supabase.from('students').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing.id)
+        if (error) { setFormError(`保存に失敗しました: ${error.message}`); return }
+      } else {
+        const { data, error } = await supabase.from('students').insert({ ...payload }).select('id').single()
+        if (error) { setFormError(`追加に失敗しました: ${error.message}`); return }
+        studentId = data?.id ?? ''
+      }
 
-    if (avatarFile && studentId) {
-      const url = await uploadAvatar(avatarFile, studentId)
-      if (url) await supabase.from('students').update({ avatar_url: url, updated_at: new Date().toISOString() }).eq('id', studentId)
-    }
+      if (avatarFile && studentId) {
+        const url = await uploadAvatar(avatarFile, studentId)
+        if (url) await supabase.from('students').update({ avatar_url: url, updated_at: new Date().toISOString() }).eq('id', studentId)
+      }
 
-    setSaving(false)
-    setShowModal(false)
-    setAvatarFile(null)
-    setAvatarPreview(null)
-    load()
+      setShowModal(false)
+      setAvatarFile(null)
+      setAvatarPreview(null)
+      load()
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error('Failed to save student:', e)
+      setFormError(`予期しないエラーが発生しました: ${message}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleDelete(s: Student) {
