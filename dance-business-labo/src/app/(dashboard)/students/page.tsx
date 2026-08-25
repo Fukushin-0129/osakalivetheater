@@ -219,9 +219,11 @@ export default function StudentsPage() {
 
     let studentId: string = editing?.id ?? ''
     if (editing) {
-      await supabase.from('students').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing.id)
+      const { error } = await supabase.from('students').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editing.id)
+      if (error) { setFormError(`保存に失敗しました: ${error.message}`); setSaving(false); return }
     } else {
-      const { data } = await supabase.from('students').insert({ ...payload }).select('id').single()
+      const { data, error } = await supabase.from('students').insert({ ...payload }).select('id').single()
+      if (error) { setFormError(`追加に失敗しました: ${error.message}`); setSaving(false); return }
       studentId = data?.id ?? ''
     }
 
