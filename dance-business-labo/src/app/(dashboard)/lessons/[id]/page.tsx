@@ -709,8 +709,8 @@ ${planSummary || '（未設定）'}`
             <div className="space-y-4">
               <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
                 <div className="min-w-max">
-                  {/* 生徒名ヘッダー（横並び） */}
-                  <div className="flex border-b border-gray-100 bg-gray-50">
+                  {/* 生徒名ヘッダー（横並び・スクロールしても常に見えるよう固定） */}
+                  <div className="flex border-b border-gray-100 bg-gray-50 sticky top-14 md:top-0 z-10">
                     <div className="w-48 flex-shrink-0 px-4 py-2.5" />
                     {attendingStudents.map(att => (
                       <div key={att.student_id} className="w-36 flex-shrink-0 px-2 py-2.5 text-center border-l border-gray-100">
