@@ -131,6 +131,10 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     }
     const { data } = await supabase.from('lesson_plan_items').select('*, curriculum_items(*)').eq('lesson_id', lessonId)
     setPlanItems((data ?? []) as LessonPlanItem[])
+    await supabase.from('lessons').update({
+      plan_status: (data?.length ?? 0) > 0 ? 'planned' : 'not_planned',
+      plan_generated_at: new Date().toISOString(),
+    }).eq('id', lessonId)
   }
 
   async function updatePlanNotes(planItemId: string, notes: string) {
