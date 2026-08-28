@@ -707,7 +707,7 @@ ${planSummary || '（未設定）'}`
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-white rounded-xl shadow-sm overflow-auto max-h-[75vh]">
+              <div className="bg-white rounded-xl shadow-sm overflow-auto" style={{ maxHeight: '75vh' }}>
                 <div className="min-w-max">
                   {/* 生徒名ヘッダー（横並び・スクロールしても常に見えるよう固定） */}
                   <div className="flex border-b border-gray-100 bg-gray-50 sticky top-0 z-10">
