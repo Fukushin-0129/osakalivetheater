@@ -18,6 +18,8 @@ const INIT_FORM = {
   legacy_id: '' as string | number,
   is_active: true,
   subsidy_program: '',
+  contact_method: '',
+  contact_unreachable: false,
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -112,6 +114,8 @@ export default function StudentsPage() {
       legacy_id: s.legacy_id ?? '',
       is_active: s.is_active,
       subsidy_program: s.subsidy_program ?? '',
+      contact_method: s.contact_method ?? '',
+      contact_unreachable: s.contact_unreachable ?? false,
     })
     setFormError(null)
     setAvatarFile(null)
@@ -216,6 +220,7 @@ export default function StudentsPage() {
         address2: form.address2 || null,
         address3: form.address3 || null,
         subsidy_program: form.subsidy_program || null,
+        contact_method: form.contact_method || null,
       }
 
       let studentId: string = editing?.id ?? ''
@@ -382,6 +387,16 @@ export default function StudentsPage() {
                           {s.subsidy_program && (
                             <span title={s.subsidy_program} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
                               助成
+                            </span>
+                          )}
+                          {s.contact_method && (
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${s.contact_unreachable ? 'bg-red-100 text-red-700' : 'bg-sky-100 text-sky-700'}`}>
+                              {s.contact_method}{s.contact_unreachable ? '・不通' : ''}
+                            </span>
+                          )}
+                          {!s.is_active && !s.email && !s.contact_method && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
+                              連絡先不明
                             </span>
                           )}
                         </div>
@@ -593,6 +608,30 @@ export default function StudentsPage() {
                     />
                   </Field>
                 </div>
+                <Field label="連絡手段">
+                  <select
+                    value={form.contact_method}
+                    onChange={e => setForm(f => ({ ...f, contact_method: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">未設定</option>
+                    <option value="メール">メール</option>
+                    <option value="LINE">LINE</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="電話">電話</option>
+                    <option value="その他">その他</option>
+                  </select>
+                </Field>
+                <Field label="連絡状況">
+                  <label className="flex items-center gap-2 text-sm text-gray-600 h-[38px]">
+                    <input
+                      type="checkbox"
+                      checked={form.contact_unreachable}
+                      onChange={e => setForm(f => ({ ...f, contact_unreachable: e.target.checked }))}
+                    />
+                    連絡が通じていない
+                  </label>
+                </Field>
 
                 {/* 郵便番号 */}
                 <div className="col-span-2">

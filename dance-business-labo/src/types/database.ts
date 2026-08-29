@@ -19,6 +19,8 @@ export type Student = {
   goal: string | null
   qr_token: string
   subsidy_program: string | null
+  contact_method: string | null
+  contact_unreachable: boolean
   created_at: string
   updated_at: string
 }
