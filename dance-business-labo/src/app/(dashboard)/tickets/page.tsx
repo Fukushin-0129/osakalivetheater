@@ -475,7 +475,7 @@ export default function TicketsPage() {
                   className={inputCls}
                 >
                   <option value="">生徒を選択</option>
-                  {students.map(s => <option key={s.id} value={s.id}>{s.name}　{s.name_kana ? `（${s.name_kana}）` : ''}</option>)}
+                  {students.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.name}　{s.name_kana ? `（${s.name_kana}）` : ''}</option>)}
                 </select>
               </div>
               <div>
