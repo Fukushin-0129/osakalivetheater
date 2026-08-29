@@ -123,7 +123,7 @@ export default function StudentSubscriptionModal({
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50"
             >
               <option value="">選択してください</option>
-              {students.map((s) => (
+              {students.filter((s) => s.is_active).map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>

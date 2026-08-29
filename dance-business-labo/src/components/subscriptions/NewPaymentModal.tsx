@@ -81,7 +81,7 @@ export default function NewPaymentModal({
             <label className="block text-xs font-medium text-gray-600 mb-1">生徒 *</label>
             <select value={studentId} onChange={e => setStudentId(e.target.value)} className={inputCls}>
               <option value="">選択してください</option>
-              {students.map(s => (
+              {students.filter(s => s.is_active).map(s => (
                 <option key={s.id} value={s.id}>{s.name}{s.subsidy_program ? '（助成対象）' : ''}</option>
               ))}
             </select>
