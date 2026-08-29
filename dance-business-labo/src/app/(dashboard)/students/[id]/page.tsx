@@ -154,7 +154,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <div className="grid md:grid-cols-[280px_1fr] gap-4 mb-4">
+      <div className="grid md:grid-cols-[200px_1fr_240px] gap-4 mb-4">
         <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col items-center justify-center">
           {avatarSignedUrl ? (
             <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[3/4] rounded-xl object-contain bg-gray-50 shadow-sm" />
@@ -192,9 +192,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             )}
           </dl>
         </div>
-      </div>
 
-      <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div className="bg-white rounded-xl shadow-sm p-5">
           <h2 className="font-semibold text-gray-700 mb-3">チケット残数</h2>
           {!tickets || tickets.length === 0 ? (
@@ -210,20 +208,20 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             </ul>
           )}
         </div>
+      </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-5">
-          <h2 className="font-semibold text-gray-700 mb-3">
-            出席履歴
-            {attendanceRecords.length > 0 && (
-              <span className="ml-2 text-xs font-normal text-gray-400">全{attendanceRecords.length}件</span>
-            )}
-          </h2>
-          {student.is_active ? (
-            <AttendanceCalendar records={attendanceRecords} />
-          ) : (
-            <AttendanceList records={attendanceRecords} />
+      <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
+        <h2 className="font-semibold text-gray-700 mb-3">
+          出席履歴
+          {attendanceRecords.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-gray-400">全{attendanceRecords.length}件</span>
           )}
-        </div>
+        </h2>
+        {student.is_active ? (
+          <AttendanceCalendar records={attendanceRecords} />
+        ) : (
+          <AttendanceList records={attendanceRecords} />
+        )}
       </div>
 
       <StudentKarteSection studentId={id} initialRecords={records ?? []} />
