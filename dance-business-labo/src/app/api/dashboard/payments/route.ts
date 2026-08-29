@@ -2,6 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { requireStaff } from '@/lib/supabase/require-staff'
 import { NextRequest, NextResponse } from 'next/server'
 
+const PAYMENT_TYPE_CATEGORY: Record<string, string> = {
+  ticket_purchase: 'チケット販売',
+  subscription_payment: 'レッスン収入',
+  trial_lesson_payment: '体験レッスン収入',
+  manual: 'その他収入',
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
@@ -89,11 +96,30 @@ export async function POST(req: NextRequest) {
           subsidy_received: subsidy_received || false,
         },
       ])
-      .select()
+      .select('*, students(name)')
 
     if (error) throw error
 
-    return NextResponse.json({ data: data?.[0] }, { status: 201 })
+    const payment = data?.[0]
+
+    // 完済で作成された場合は、その場で損益管理（transactions）へ収入を計上する。
+    if (payment && payment.status === 'completed') {
+      const category = PAYMENT_TYPE_CATEGORY[payment.payment_type] ?? 'その他収入'
+      const studentName = (payment.students as { name: string } | null)?.name ?? ''
+      const description = `${category}${studentName ? `（${studentName}）` : ''} [ref:${payment.id}]`
+
+      await supabase.from('transactions').insert([
+        {
+          transaction_date: payment.payment_date,
+          type: 'income',
+          category,
+          amount: payment.amount,
+          description,
+        },
+      ])
+    }
+
+    return NextResponse.json({ data: payment }, { status: 201 })
   } catch (error) {
     console.error('Error creating payment:', error)
     return NextResponse.json(
