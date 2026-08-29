@@ -27,12 +27,16 @@ function AttendanceCalendar({ records }: { records: AttendanceRecord[] }) {
     }
   }
 
-  const months = [...monthMap.keys()].sort((a, b) => b.localeCompare(a))
+  const allMonths = [...monthMap.keys()].sort((a, b) => b.localeCompare(a))
+  const months = allMonths.slice(0, 3)
 
   if (months.length === 0) return <p className="text-gray-400 text-sm">出席記録なし</p>
 
   return (
     <div className="space-y-5">
+      {allMonths.length > months.length && (
+        <p className="text-xs text-gray-400">直近{months.length}ヶ月分を表示（それ以前は出席管理から確認できます）</p>
+      )}
       {months.map(key => {
         const [y, m] = key.split('-').map(Number)
         const attendedDays = monthMap.get(key)!
