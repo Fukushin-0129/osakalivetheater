@@ -19,6 +19,7 @@ const INIT_FORM = {
   is_active: true,
   subsidy_program: '',
   contact_method: '',
+  contact_detail: '',
   contact_response_level: '' as string | number,
 }
 
@@ -128,6 +129,7 @@ export default function StudentsPage() {
       is_active: s.is_active,
       subsidy_program: s.subsidy_program ?? '',
       contact_method: s.contact_method ?? '',
+      contact_detail: s.contact_detail ?? '',
       contact_response_level: s.contact_response_level ?? '',
     })
     setFormError(null)
@@ -234,6 +236,7 @@ export default function StudentsPage() {
         address3: form.address3 || null,
         subsidy_program: form.subsidy_program || null,
         contact_method: form.contact_method || null,
+        contact_detail: form.contact_detail || null,
         contact_response_level: form.contact_response_level !== '' ? Number(form.contact_response_level) : null,
       }
 
@@ -404,8 +407,8 @@ export default function StudentsPage() {
                             </span>
                           )}
                           {s.contact_method && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-700">
-                              {s.contact_method}
+                            <span title={s.contact_detail ?? undefined} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-700">
+                              {s.contact_method}{s.contact_detail ? `: ${s.contact_detail}` : ''}
                             </span>
                           )}
                           {s.contact_response_level != null && (
@@ -635,6 +638,15 @@ export default function StudentsPage() {
                     <option value="電話">電話</option>
                     <option value="その他">その他</option>
                   </select>
+                </Field>
+                <Field label="連絡先の詳細（LINE IDなど）">
+                  <input
+                    type="text"
+                    value={form.contact_detail}
+                    onChange={e => setForm(f => ({ ...f, contact_detail: e.target.value }))}
+                    placeholder="例: LINE ID @xxxxx"
+                    className={inputCls}
+                  />
                 </Field>
                 <Field label="反応レベル">
                   <select
