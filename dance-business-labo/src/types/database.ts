@@ -20,7 +20,7 @@ export type Student = {
   qr_token: string
   subsidy_program: string | null
   contact_method: string | null
-  contact_unreachable: boolean
+  contact_response_level: number | null
   created_at: string
   updated_at: string
 }
