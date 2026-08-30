@@ -19,7 +19,7 @@ const INIT_FORM = {
   is_active: true,
   subsidy_program: '',
   contact_method: '',
-  contact_unreachable: false,
+  contact_response_level: '' as string | number,
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -32,6 +32,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+
+const RESPONSE_LEVEL_LABEL: Record<number, string> = {
+  0: '連絡先不明',
+  1: '無反応',
+  2: 'やや反応',
+  3: '反応あり',
+}
+const RESPONSE_LEVEL_STYLE: Record<number, string> = {
+  0: 'bg-red-100 text-red-700',
+  1: 'bg-orange-100 text-orange-700',
+  2: 'bg-yellow-100 text-yellow-700',
+  3: 'bg-green-100 text-green-700',
+}
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
@@ -115,7 +128,7 @@ export default function StudentsPage() {
       is_active: s.is_active,
       subsidy_program: s.subsidy_program ?? '',
       contact_method: s.contact_method ?? '',
-      contact_unreachable: s.contact_unreachable ?? false,
+      contact_response_level: s.contact_response_level ?? '',
     })
     setFormError(null)
     setAvatarFile(null)
@@ -221,6 +234,7 @@ export default function StudentsPage() {
         address3: form.address3 || null,
         subsidy_program: form.subsidy_program || null,
         contact_method: form.contact_method || null,
+        contact_response_level: form.contact_response_level !== '' ? Number(form.contact_response_level) : null,
       }
 
       let studentId: string = editing?.id ?? ''
@@ -390,13 +404,13 @@ export default function StudentsPage() {
                             </span>
                           )}
                           {s.contact_method && (
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${s.contact_unreachable ? 'bg-red-100 text-red-700' : 'bg-sky-100 text-sky-700'}`}>
-                              {s.contact_method}{s.contact_unreachable ? '・不通' : ''}
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-100 text-sky-700">
+                              {s.contact_method}
                             </span>
                           )}
-                          {!s.is_active && !s.email && !s.contact_method && (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
-                              連絡先不明
+                          {s.contact_response_level != null && (
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${RESPONSE_LEVEL_STYLE[s.contact_response_level]}`}>
+                              {RESPONSE_LEVEL_LABEL[s.contact_response_level]}
                             </span>
                           )}
                         </div>
@@ -622,15 +636,18 @@ export default function StudentsPage() {
                     <option value="その他">その他</option>
                   </select>
                 </Field>
-                <Field label="連絡状況">
-                  <label className="flex items-center gap-2 text-sm text-gray-600 h-[38px]">
-                    <input
-                      type="checkbox"
-                      checked={form.contact_unreachable}
-                      onChange={e => setForm(f => ({ ...f, contact_unreachable: e.target.checked }))}
-                    />
-                    連絡が通じていない
-                  </label>
+                <Field label="反応レベル">
+                  <select
+                    value={form.contact_response_level}
+                    onChange={e => setForm(f => ({ ...f, contact_response_level: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">未設定</option>
+                    <option value="0">0: 連絡先不明</option>
+                    <option value="1">1: 無反応</option>
+                    <option value="2">2: やや反応</option>
+                    <option value="3">3: 反応あり</option>
+                  </select>
                 </Field>
 
                 {/* 郵便番号 */}
