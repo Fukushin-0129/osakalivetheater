@@ -50,6 +50,7 @@ const RESPONSE_LEVEL_STYLE: Record<number, string> = {
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [lastAttendedMap, setLastAttendedMap] = useState<Map<string, string>>(new Map())
+  const [lastKarteMap, setLastKarteMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
@@ -72,9 +73,10 @@ export default function StudentsPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: stuData }, { data: attData }] = await Promise.all([
+    const [{ data: stuData }, { data: attData }, { data: karteData }] = await Promise.all([
       supabase.from('students').select('*'),
       supabase.rpc('get_last_attended_dates'),
+      supabase.from('student_records').select('student_id, record_date').order('record_date', { ascending: false }),
     ])
     const stuList = stuData ?? []
     setStudents(stuList)
@@ -96,6 +98,13 @@ export default function StudentsPage() {
       if (a.last_attended) map.set(a.student_id, a.last_attended)
     }
     setLastAttendedMap(map)
+
+    const karteMap = new Map<string, string>()
+    for (const r of (karteData ?? []) as { student_id: string; record_date: string }[]) {
+      if (!karteMap.has(r.student_id)) karteMap.set(r.student_id, r.record_date)
+    }
+    setLastKarteMap(karteMap)
+
     setLoading(false)
   }
 
@@ -372,6 +381,7 @@ export default function StudentsPage() {
                 <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">電話番号</th>
                 <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">体験レッスン日</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">最終参加日</th>
+                <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">最終やり取り</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">状態</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -379,7 +389,7 @@ export default function StudentsPage() {
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-400">
+                  <td colSpan={8} className="text-center py-12 text-gray-400">
                     <Users size={32} className="mx-auto mb-2 opacity-30" />
                     {search ? '検索条件に一致する生徒が見つかりません' : '生徒が登録されていません'}
                   </td>
@@ -431,6 +441,7 @@ export default function StudentsPage() {
                     {s.joined_at ? new Date(s.joined_at).toLocaleDateString('ja-JP') : '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">{lastAttendedMap.get(s.id) ? new Date(lastAttendedMap.get(s.id)!).toLocaleDateString('ja-JP') : '—'}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">{lastKarteMap.get(s.id) ? new Date(lastKarteMap.get(s.id)!).toLocaleDateString('ja-JP') : '—'}</td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => toggleActive(s)}
