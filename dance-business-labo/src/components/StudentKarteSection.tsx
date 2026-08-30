@@ -20,6 +20,7 @@ export default function StudentKarteSection({
   const [adding, setAdding] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
+  const [addError, setAddError] = useState<string | null>(null)
   const composingRef = useRef(false)
 
   function startEdit(r: StudentRecord) {
@@ -45,10 +46,16 @@ export default function StudentKarteSection({
   async function addRecord() {
     if (!newContent.trim()) return
     setSaving(true)
-    const { data } = await supabase
+    setAddError(null)
+    const { data, error } = await supabase
       .from('student_records')
       .insert({ student_id: studentId, content: newContent.trim(), record_date: newDate })
       .select().single()
+    if (error) {
+      setAddError(error.message)
+      setSaving(false)
+      return
+    }
     if (data) setRecords(prev => [data as StudentRecord, ...prev].sort((a, b) => b.record_date.localeCompare(a.record_date)))
     setNewContent('')
     setNewDate(new Date().toISOString().split('T')[0])
@@ -60,7 +67,7 @@ export default function StudentKarteSection({
     <div className="bg-white rounded-xl shadow-sm p-5">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-700">カルテ</h2>
-        <button onClick={() => setAdding(v => !v)}
+        <button onClick={() => { setAdding(v => !v); setAddError(null) }}
           className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
           <Plus size={13} /> 追加
         </button>
@@ -78,6 +85,7 @@ export default function StudentKarteSection({
             placeholder="記録内容"
             rows={3}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+          {addError && <p className="text-xs text-red-600">保存に失敗しました: {addError}</p>}
           <div className="flex gap-2 justify-end">
             <button onClick={() => setAdding(false)} className="text-xs text-gray-500 px-3 py-1.5 hover:bg-gray-100 rounded-lg">キャンセル</button>
             <button onClick={addRecord} disabled={saving || !newContent.trim()}
