@@ -646,6 +646,7 @@ export default function StudentsPage() {
                     <option value="メール">メール</option>
                     <option value="LINE">LINE</option>
                     <option value="Instagram">Instagram</option>
+                    <option value="Messenger">Messenger</option>
                     <option value="電話">電話</option>
                     <option value="その他">その他</option>
                   </select>
