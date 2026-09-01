@@ -53,8 +53,12 @@ export default function StudentsPage() {
   const [lastKarteMap, setLastKarteMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [search, setSearch] = useState(() => (typeof window !== 'undefined' ? sessionStorage.getItem('studentsPage:search') ?? '' : ''))
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>(() => {
+    if (typeof window === 'undefined') return 'all'
+    const saved = sessionStorage.getItem('studentsPage:filter')
+    return (saved === 'active' || saved === 'inactive' || saved === 'all') ? saved : 'all'
+  })
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
   const [form, setForm] = useState(INIT_FORM)
@@ -109,6 +113,23 @@ export default function StudentsPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // 検索・絞り込みの条件を覚えておき、詳細ページから戻ってきた時に復元する
+  useEffect(() => { sessionStorage.setItem('studentsPage:search', search) }, [search])
+  useEffect(() => { sessionStorage.setItem('studentsPage:filter', filterStatus) }, [filterStatus])
+
+  // 一覧の読み込みが終わったら、直前に見ていたスクロール位置へ戻す
+  useEffect(() => {
+    if (loading) return
+    const saved = sessionStorage.getItem('studentsPage:scrollY')
+    if (saved) requestAnimationFrame(() => window.scrollTo(0, Number(saved)))
+  }, [loading])
+
+  useEffect(() => {
+    function saveScroll() { sessionStorage.setItem('studentsPage:scrollY', String(window.scrollY)) }
+    window.addEventListener('scroll', saveScroll, { passive: true })
+    return () => window.removeEventListener('scroll', saveScroll)
+  }, [])
 
   function openNew() {
     setEditing(null)
