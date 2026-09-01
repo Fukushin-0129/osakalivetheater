@@ -1,9 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import StudentKarteSection from '@/components/StudentKarteSection'
 import StudentQrCode from '@/components/StudentQrCode'
+import BackButton from '@/components/BackButton'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -139,7 +138,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/students" className="text-gray-400 hover:text-gray-600"><ArrowLeft size={20} /></Link>
+        <BackButton fallbackHref="/students" />
         <h1 className="text-2xl font-bold text-gray-800">{student.name}</h1>
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${student.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
           {student.is_active ? '在籍' : '休会'}
