@@ -21,12 +21,14 @@ export default function StudentKarteSection({
   const [newContent, setNewContent] = useState('')
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
   const [addError, setAddError] = useState<string | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const composingRef = useRef(false)
 
   function startEdit(r: StudentRecord) {
     setEditingId(r.id)
     setEditContent(r.content)
+    setEditError(null)
   }
 
   async function copyRecord(r: StudentRecord) {
@@ -42,7 +44,13 @@ export default function StudentKarteSection({
   async function saveEdit(id: string) {
     if (!editContent.trim()) return
     setSaving(true)
-    await supabase.from('student_records').update({ content: editContent.trim() }).eq('id', id)
+    setEditError(null)
+    const { error } = await supabase.from('student_records').update({ content: editContent.trim() }).eq('id', id)
+    if (error) {
+      setEditError(error.message)
+      setSaving(false)
+      return
+    }
     setRecords(prev => prev.map(r => r.id === id ? { ...r, content: editContent.trim() } : r))
     setSaving(false)
     setEditingId(null)
@@ -50,7 +58,8 @@ export default function StudentKarteSection({
 
   async function deleteRecord(id: string) {
     if (!confirm('この記録を削除しますか？')) return
-    await supabase.from('student_records').delete().eq('id', id)
+    const { error } = await supabase.from('student_records').delete().eq('id', id)
+    if (error) { alert(`削除に失敗しました: ${error.message}`); return }
     setRecords(prev => prev.filter(r => r.id !== id))
   }
 
@@ -141,7 +150,9 @@ export default function StudentKarteSection({
                   rows={4}
                   autoFocus
                   className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-              ) : (
+              ) : null}
+              {editingId === r.id && editError && <p className="text-xs text-red-600 mt-1">保存に失敗しました: {editError}</p>}
+              {editingId !== r.id && (
                 <div className="text-gray-700 whitespace-pre-wrap cursor-pointer" onClick={() => startEdit(r)}>{r.content}</div>
               )}
             </li>
