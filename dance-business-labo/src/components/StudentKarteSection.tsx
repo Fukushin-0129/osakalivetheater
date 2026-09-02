@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { StudentRecord } from '@/types/database'
-import { Pencil, Trash2, Check, X, Plus, Loader2 } from 'lucide-react'
+import { Pencil, Trash2, Check, X, Plus, Loader2, Copy, ClipboardCheck } from 'lucide-react'
 
 export default function StudentKarteSection({
   studentId,
@@ -21,11 +21,22 @@ export default function StudentKarteSection({
   const [newContent, setNewContent] = useState('')
   const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
   const [addError, setAddError] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const composingRef = useRef(false)
 
   function startEdit(r: StudentRecord) {
     setEditingId(r.id)
     setEditContent(r.content)
+  }
+
+  async function copyRecord(r: StudentRecord) {
+    try {
+      await navigator.clipboard.writeText(r.content)
+      setCopiedId(r.id)
+      setTimeout(() => setCopiedId(id => id === r.id ? null : id), 1500)
+    } catch {
+      // クリップボードが使えない環境では何もしない
+    }
   }
 
   async function saveEdit(id: string) {
@@ -104,7 +115,7 @@ export default function StudentKarteSection({
             <li key={r.id} className="group">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-gray-400">{r.record_date}</span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1">
                   {editingId === r.id ? (
                     <>
                       <button onClick={() => saveEdit(r.id)} disabled={saving} className="p-1 text-green-600 hover:bg-green-50 rounded"><Check size={13} /></button>
@@ -112,8 +123,11 @@ export default function StudentKarteSection({
                     </>
                   ) : (
                     <>
-                      <button onClick={() => startEdit(r)} className="p-1 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Pencil size={13} /></button>
-                      <button onClick={() => deleteRecord(r.id)} className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 size={13} /></button>
+                      <button onClick={() => copyRecord(r)} title="コピー" className="p-1 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded">
+                        {copiedId === r.id ? <ClipboardCheck size={13} className="text-green-600" /> : <Copy size={13} />}
+                      </button>
+                      <button onClick={() => startEdit(r)} title="編集" className="p-1 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Pencil size={13} /></button>
+                      <button onClick={() => deleteRecord(r.id)} title="削除" className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 size={13} /></button>
                     </>
                   )}
                 </div>
