@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { StudentRecord } from '@/types/database'
 import { Pencil, Trash2, Check, X, Plus, Loader2, Copy, ClipboardCheck } from 'lucide-react'
@@ -23,7 +23,6 @@ export default function StudentKarteSection({
   const [addError, setAddError] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const composingRef = useRef(false)
 
   function startEdit(r: StudentRecord) {
     setEditingId(r.id)
@@ -99,9 +98,7 @@ export default function StudentKarteSection({
             className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           <textarea
             value={newContent}
-            onCompositionStart={() => { composingRef.current = true }}
-            onCompositionEnd={e => { composingRef.current = false; setNewContent((e.target as HTMLTextAreaElement).value) }}
-            onChange={e => { if (!composingRef.current) setNewContent(e.target.value) }}
+            onChange={e => setNewContent(e.target.value)}
             placeholder="記録内容"
             rows={3}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
@@ -143,10 +140,8 @@ export default function StudentKarteSection({
               </div>
               {editingId === r.id ? (
                 <textarea
-                  defaultValue={r.content}
-                  onCompositionStart={() => { composingRef.current = true }}
-                  onCompositionEnd={e => { composingRef.current = false; setEditContent((e.target as HTMLTextAreaElement).value) }}
-                  onChange={e => { if (!composingRef.current) setEditContent(e.target.value) }}
+                  value={editContent}
+                  onChange={e => setEditContent(e.target.value)}
                   rows={4}
                   autoFocus
                   className="w-full border border-indigo-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
