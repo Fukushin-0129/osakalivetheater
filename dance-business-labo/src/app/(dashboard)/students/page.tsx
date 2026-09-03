@@ -3,12 +3,13 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Student } from '@/types/database'
-import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, X, Loader2, Camera, Check } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, X, Loader2, Camera, Check, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import Link from 'next/link'
 import ReactCrop, { type Crop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 
 type FilterStatus = 'all' | 'active' | 'inactive'
+type SortKey = 'name' | 'legacy_id' | 'phone' | 'joined_at' | 'lastAttended' | 'lastKarte' | 'status'
 
 const INIT_FORM = {
   name: '', name_kana: '', email: '', phone: '',
@@ -33,6 +34,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
+
+function SortTh({ label, active, dir, onClick, className }: { label: string; active: boolean; dir: 'asc' | 'desc'; onClick: () => void; className?: string }) {
+  return (
+    <th className={`text-left px-4 py-3 text-xs font-semibold text-gray-600 ${className ?? ''}`}>
+      <button onClick={onClick} className={`flex items-center gap-1 hover:text-indigo-600 ${active ? 'text-indigo-600' : ''}`}>
+        {label}
+        {active ? (dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} className="text-gray-300" />}
+      </button>
+    </th>
+  )
+}
 
 const RESPONSE_LEVEL_LABEL: Record<number, string> = {
   0: '連絡先不明',
@@ -59,6 +71,8 @@ export default function StudentsPage() {
     const saved = sessionStorage.getItem('studentsPage:filter')
     return (saved === 'active' || saved === 'inactive' || saved === 'all') ? saved : 'all'
   })
+  const [sortKey, setSortKey] = useState<SortKey | null>(() => (typeof window !== 'undefined' ? (sessionStorage.getItem('studentsPage:sortKey') as SortKey | null) : null))
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() => (typeof window !== 'undefined' && sessionStorage.getItem('studentsPage:sortDir') === 'desc') ? 'desc' : 'asc')
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<Student | null>(null)
   const [form, setForm] = useState(INIT_FORM)
@@ -117,6 +131,17 @@ export default function StudentsPage() {
   // 検索・絞り込みの条件を覚えておき、詳細ページから戻ってきた時に復元する
   useEffect(() => { sessionStorage.setItem('studentsPage:search', search) }, [search])
   useEffect(() => { sessionStorage.setItem('studentsPage:filter', filterStatus) }, [filterStatus])
+  useEffect(() => { sessionStorage.setItem('studentsPage:sortKey', sortKey ?? '') }, [sortKey])
+  useEffect(() => { sessionStorage.setItem('studentsPage:sortDir', sortDir) }, [sortDir])
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   // 一覧の読み込みが終わったら、直前に見ていたスクロール位置へ戻す
   useEffect(() => {
@@ -322,15 +347,40 @@ export default function StudentsPage() {
         (s.phone ?? '').includes(q)
       )
     }
-    list = [...list].sort((a, b) => {
-      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
-      const aDate = lastAttendedMap.get(a.id) ?? ''
-      const bDate = lastAttendedMap.get(b.id) ?? ''
-      if (aDate !== bDate) return bDate.localeCompare(aDate)
-      return (a.name_kana ?? a.name).localeCompare(b.name_kana ?? b.name, 'ja')
-    })
+    if (sortKey) {
+      const dir = sortDir === 'asc' ? 1 : -1
+      const getValue = (s: Student): string | number => {
+        switch (sortKey) {
+          case 'name': return s.name_kana ?? s.name
+          case 'legacy_id': return s.legacy_id ?? Infinity
+          case 'phone': return s.phone ?? ''
+          case 'joined_at': return s.joined_at ?? ''
+          case 'lastAttended': return lastAttendedMap.get(s.id) ?? ''
+          case 'lastKarte': return lastKarteMap.get(s.id) ?? ''
+          case 'status': return s.is_active ? 1 : 0
+        }
+      }
+      list = [...list].sort((a, b) => {
+        const av = getValue(a)
+        const bv = getValue(b)
+        const aEmpty = av === '' || av === Infinity
+        const bEmpty = bv === '' || bv === Infinity
+        if (aEmpty !== bEmpty) return aEmpty ? 1 : -1
+        if (av < bv) return -1 * dir
+        if (av > bv) return 1 * dir
+        return (a.name_kana ?? a.name).localeCompare(b.name_kana ?? b.name, 'ja')
+      })
+    } else {
+      list = [...list].sort((a, b) => {
+        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+        const aDate = lastAttendedMap.get(a.id) ?? ''
+        const bDate = lastAttendedMap.get(b.id) ?? ''
+        if (aDate !== bDate) return bDate.localeCompare(aDate)
+        return (a.name_kana ?? a.name).localeCompare(b.name_kana ?? b.name, 'ja')
+      })
+    }
     return list
-  }, [students, search, filterStatus, lastAttendedMap])
+  }, [students, search, filterStatus, lastAttendedMap, lastKarteMap, sortKey, sortDir])
 
   const activeCount = students.filter(s => s.is_active).length
   const inactiveCount = students.filter(s => !s.is_active).length
@@ -397,13 +447,13 @@ export default function StudentsPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">名前</th>
-                <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">参加者ID</th>
-                <th className="text-left px-4 py-3 hidden md:table-cell text-xs font-semibold text-gray-600">電話番号</th>
-                <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">体験レッスン日</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">最終参加日</th>
-                <th className="text-left px-4 py-3 hidden lg:table-cell text-xs font-semibold text-gray-600">最終やり取り</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">状態</th>
+                <SortTh label="名前" active={sortKey === 'name'} dir={sortDir} onClick={() => toggleSort('name')} />
+                <SortTh label="参加者ID" active={sortKey === 'legacy_id'} dir={sortDir} onClick={() => toggleSort('legacy_id')} className="hidden md:table-cell" />
+                <SortTh label="電話番号" active={sortKey === 'phone'} dir={sortDir} onClick={() => toggleSort('phone')} className="hidden md:table-cell" />
+                <SortTh label="体験レッスン日" active={sortKey === 'joined_at'} dir={sortDir} onClick={() => toggleSort('joined_at')} className="hidden lg:table-cell" />
+                <SortTh label="最終参加日" active={sortKey === 'lastAttended'} dir={sortDir} onClick={() => toggleSort('lastAttended')} />
+                <SortTh label="最終やり取り" active={sortKey === 'lastKarte'} dir={sortDir} onClick={() => toggleSort('lastKarte')} className="hidden lg:table-cell" />
+                <SortTh label="状態" active={sortKey === 'status'} dir={sortDir} onClick={() => toggleSort('status')} />
                 <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
