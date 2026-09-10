@@ -9,7 +9,7 @@ import ReactCrop, { type Crop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 
 type FilterStatus = 'all' | 'active' | 'inactive'
-type SortKey = 'name' | 'legacy_id' | 'phone' | 'joined_at' | 'lastAttended' | 'lastKarte' | 'status'
+type SortKey = 'name' | 'legacy_id' | 'phone' | 'joined_at' | 'lastAttended' | 'lastKarte' | 'status' | 'contactMethod' | 'responseLevel'
 
 const INIT_FORM = {
   name: '', name_kana: '', email: '', phone: '',
@@ -358,6 +358,8 @@ export default function StudentsPage() {
           case 'lastAttended': return lastAttendedMap.get(s.id) ?? ''
           case 'lastKarte': return lastKarteMap.get(s.id) ?? ''
           case 'status': return s.is_active ? 1 : 0
+          case 'contactMethod': return s.contact_method ?? ''
+          case 'responseLevel': return s.contact_response_level ?? Infinity
         }
       }
       list = [...list].sort((a, b) => {
@@ -453,6 +455,8 @@ export default function StudentsPage() {
                 <SortTh label="体験レッスン日" active={sortKey === 'joined_at'} dir={sortDir} onClick={() => toggleSort('joined_at')} className="hidden lg:table-cell" />
                 <SortTh label="最終参加日" active={sortKey === 'lastAttended'} dir={sortDir} onClick={() => toggleSort('lastAttended')} />
                 <SortTh label="最終やり取り" active={sortKey === 'lastKarte'} dir={sortDir} onClick={() => toggleSort('lastKarte')} className="hidden lg:table-cell" />
+                <SortTh label="連絡手段" active={sortKey === 'contactMethod'} dir={sortDir} onClick={() => toggleSort('contactMethod')} className="hidden lg:table-cell" />
+                <SortTh label="反応" active={sortKey === 'responseLevel'} dir={sortDir} onClick={() => toggleSort('responseLevel')} className="hidden lg:table-cell" />
                 <SortTh label="状態" active={sortKey === 'status'} dir={sortDir} onClick={() => toggleSort('status')} />
                 <th className="px-4 py-3 w-20"></th>
               </tr>
@@ -460,7 +464,7 @@ export default function StudentsPage() {
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-gray-400">
+                  <td colSpan={10} className="text-center py-12 text-gray-400">
                     <Users size={32} className="mx-auto mb-2 opacity-30" />
                     {search ? '検索条件に一致する生徒が見つかりません' : '生徒が登録されていません'}
                   </td>
@@ -513,6 +517,14 @@ export default function StudentsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-xs">{lastAttendedMap.get(s.id) ? new Date(lastAttendedMap.get(s.id)!).toLocaleDateString('ja-JP') : '—'}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">{lastKarteMap.get(s.id) ? new Date(lastKarteMap.get(s.id)!).toLocaleDateString('ja-JP') : '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs hidden lg:table-cell">{s.contact_method ?? '—'}</td>
+                  <td className="px-4 py-3 hidden lg:table-cell">
+                    {s.contact_response_level != null ? (
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${RESPONSE_LEVEL_STYLE[s.contact_response_level]}`}>
+                        {RESPONSE_LEVEL_LABEL[s.contact_response_level]}
+                      </span>
+                    ) : <span className="text-gray-300 text-xs">—</span>}
+                  </td>
                   <td className="px-4 py-3">
                     <button
                       onClick={() => toggleActive(s)}
