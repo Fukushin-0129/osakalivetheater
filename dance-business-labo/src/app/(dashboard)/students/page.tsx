@@ -122,6 +122,22 @@ export default function StudentsPage() {
     for (const r of (karteData ?? []) as { student_id: string; record_date: string }[]) {
       if (!karteMap.has(r.student_id)) karteMap.set(r.student_id, r.record_date)
     }
+    // 家族グループ内では、誰か一人とのやり取りを家族全体の最終やり取りとして共有する
+    const familyLatest = new Map<string, string>()
+    for (const s of stuList) {
+      if (!s.family_group) continue
+      const d = karteMap.get(s.id)
+      if (d && (!familyLatest.has(s.family_group) || d > familyLatest.get(s.family_group)!)) {
+        familyLatest.set(s.family_group, d)
+      }
+    }
+    for (const s of stuList) {
+      if (!s.family_group) continue
+      const familyDate = familyLatest.get(s.family_group)
+      if (familyDate && (!karteMap.has(s.id) || familyDate > karteMap.get(s.id)!)) {
+        karteMap.set(s.id, familyDate)
+      }
+    }
     setLastKarteMap(karteMap)
 
     setLoading(false)
@@ -311,6 +327,16 @@ export default function StudentsPage() {
       if (avatarFile && studentId) {
         const url = await uploadAvatar(avatarFile, studentId)
         if (url) await supabase.from('students').update({ avatar_url: url, updated_at: new Date().toISOString() }).eq('id', studentId)
+      }
+
+      // 家族グループ内では、連絡手段・連絡先詳細・反応レベルを全員で共有する
+      if (payload.family_group) {
+        await supabase.from('students').update({
+          contact_method: payload.contact_method,
+          contact_detail: payload.contact_detail,
+          contact_response_level: payload.contact_response_level,
+          updated_at: new Date().toISOString(),
+        }).eq('family_group', payload.family_group).neq('id', studentId)
       }
 
       setShowModal(false)
