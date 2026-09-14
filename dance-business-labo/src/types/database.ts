@@ -22,6 +22,7 @@ export type Student = {
   contact_method: string | null
   contact_detail: string | null
   contact_response_level: number | null
+  family_group: string | null
   created_at: string
   updated_at: string
 }

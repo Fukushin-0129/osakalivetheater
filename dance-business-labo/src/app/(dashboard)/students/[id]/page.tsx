@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import StudentKarteSection from '@/components/StudentKarteSection'
 import StudentQrCode from '@/components/StudentQrCode'
 import BackButton from '@/components/BackButton'
@@ -126,6 +127,16 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
 
   if (!student) notFound()
 
+  let familyMembers: { id: string; name: string; is_active: boolean }[] = []
+  if (student.family_group) {
+    const { data } = await supabase
+      .from('students')
+      .select('id, name, is_active')
+      .eq('family_group', student.family_group)
+      .neq('id', id)
+    familyMembers = data ?? []
+  }
+
   // プライベートバケットの署名付きURL（1時間有効）
   let avatarSignedUrl: string | null = null
   if (student.avatar_url && !student.avatar_url.startsWith('http')) {
@@ -148,10 +159,27 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             助成: {student.subsidy_program}
           </span>
         )}
+        {student.family_group && (
+          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+            {student.family_group}
+          </span>
+        )}
         <div className="ml-auto">
           <StudentQrCode studentName={student.name} qrToken={student.qr_token} />
         </div>
       </div>
+
+      {familyMembers.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 flex-wrap text-sm">
+          <span className="text-gray-400 text-xs">ご家族:</span>
+          {familyMembers.map(m => (
+            <Link key={m.id} href={`/students/${m.id}`}
+              className={`px-2 py-0.5 rounded-full text-xs font-medium hover:underline ${m.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-500'}`}>
+              {m.name}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="grid md:grid-cols-[1fr_240px] gap-4 mb-4 items-start">
         <div className="grid sm:grid-cols-[200px_1fr] gap-4">
