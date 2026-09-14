@@ -22,6 +22,7 @@ const INIT_FORM = {
   contact_method: '',
   contact_detail: '',
   contact_response_level: '' as string | number,
+  family_group: '',
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -186,6 +187,7 @@ export default function StudentsPage() {
       contact_method: s.contact_method ?? '',
       contact_detail: s.contact_detail ?? '',
       contact_response_level: s.contact_response_level ?? '',
+      family_group: s.family_group ?? '',
     })
     setFormError(null)
     setAvatarFile(null)
@@ -293,6 +295,7 @@ export default function StudentsPage() {
         contact_method: form.contact_method || null,
         contact_detail: form.contact_detail || null,
         contact_response_level: form.contact_response_level !== '' ? Number(form.contact_response_level) : null,
+        family_group: form.family_group.trim() || null,
       }
 
       let studentId: string = editing?.id ?? ''
@@ -334,6 +337,11 @@ export default function StudentsPage() {
     setStudents(prev => prev.map(p => p.id === s.id ? { ...p, is_active: !s.is_active } : p))
   }
 
+  const familyGroupOptions = useMemo(() => {
+    const set = new Set(students.map(s => s.family_group).filter((g): g is string => !!g))
+    return [...set].sort((a, b) => a.localeCompare(b, 'ja'))
+  }, [students])
+
   const filtered = useMemo(() => {
     let list = students
     if (filterStatus === 'active') list = list.filter(s => s.is_active)
@@ -344,7 +352,8 @@ export default function StudentsPage() {
         s.name.includes(q) ||
         (s.name_kana ?? '').includes(q) ||
         (s.email ?? '').includes(q) ||
-        (s.phone ?? '').includes(q)
+        (s.phone ?? '').includes(q) ||
+        (s.family_group ?? '').includes(q)
       )
     }
     if (sortKey) {
@@ -486,6 +495,15 @@ export default function StudentsPage() {
                           <Link href={`/students/${s.id}`} className="font-medium text-indigo-600 hover:underline">
                             {s.name}
                           </Link>
+                          {s.family_group && (
+                            <button
+                              onClick={() => setSearch(s.family_group!)}
+                              title="クリックで同じ家族グループを絞り込み"
+                              className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 hover:bg-purple-200"
+                            >
+                              {s.family_group}
+                            </button>
+                          )}
                           {s.subsidy_program && (
                             <span title={s.subsidy_program} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
                               助成
@@ -756,6 +774,21 @@ export default function StudentsPage() {
                     <option value="3">3: 反応あり</option>
                   </select>
                 </Field>
+                <div className="col-span-2">
+                  <Field label="家族グループ（兄弟・親子をまとめる場合、同じ名前を入力）">
+                    <input
+                      type="text"
+                      list="family-group-options"
+                      value={form.family_group}
+                      onChange={e => setForm(f => ({ ...f, family_group: e.target.value }))}
+                      placeholder="例: 山田家"
+                      className={inputCls}
+                    />
+                    <datalist id="family-group-options">
+                      {familyGroupOptions.map(g => <option key={g} value={g} />)}
+                    </datalist>
+                  </Field>
+                </div>
 
                 {/* 郵便番号 */}
                 <div className="col-span-2">
