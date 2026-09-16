@@ -53,7 +53,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await req.json()
-    const { status, amount, notes, subsidy_amount, subsidy_received } = body
+    const { status, amount, payment_date, payment_type, notes, subsidy_amount, subsidy_received } = body
 
     const { data: before } = await supabase
       .from('student_payments')
@@ -67,6 +67,8 @@ export async function PUT(
       notes,
       updated_at: new Date().toISOString(),
     }
+    if (payment_date !== undefined) update.payment_date = payment_date
+    if (payment_type !== undefined) update.payment_type = payment_type
     if (subsidy_amount !== undefined) update.subsidy_amount = subsidy_amount
     if (subsidy_received !== undefined) update.subsidy_received = subsidy_received
 
@@ -79,29 +81,41 @@ export async function PUT(
     if (error) throw error
 
     const payment = data?.[0]
+    const studentName = (before?.students as { name: string } | null)?.name ?? ''
 
-    // 入金確認（pending → completed）のタイミングで損益管理（transactions）へ収入を計上する。
-    if (payment && before && before.status !== 'completed' && payment.status === 'completed') {
-      const category = PAYMENT_TYPE_CATEGORY[payment.payment_type] ?? 'その他収入'
-      const studentName = (before.students as { name: string } | null)?.name ?? ''
-      const description = `${category}${studentName ? `（${studentName}）` : ''} [ref:${payment.id}]`
-
-      const { data: existing } = await supabase
+    if (payment && before) {
+      const { data: existingTxns } = await supabase
         .from('transactions')
         .select('id')
         .ilike('description', `%[ref:${payment.id}]%`)
-        .limit(1)
 
-      if (!existing || existing.length === 0) {
-        await supabase.from('transactions').insert([
-          {
+      const wasCompleted = before.status === 'completed'
+      const isCompleted = payment.status === 'completed'
+
+      if (isCompleted) {
+        const category = PAYMENT_TYPE_CATEGORY[payment.payment_type] ?? 'その他収入'
+        const description = `${category}${studentName ? `（${studentName}）` : ''} [ref:${payment.id}]`
+        if (existingTxns && existingTxns.length > 0) {
+          // 既に計上済みなら、金額・日付・種別の変更を反映する
+          await supabase.from('transactions').update({
+            transaction_date: payment.payment_date,
+            category,
+            amount: payment.amount,
+            description,
+          }).eq('id', existingTxns[0].id)
+        } else if (!wasCompleted) {
+          // pending/failed → completed の遷移で新規計上
+          await supabase.from('transactions').insert([{
             transaction_date: payment.payment_date,
             type: 'income',
             category,
             amount: payment.amount,
             description,
-          },
-        ])
+          }])
+        }
+      } else if (wasCompleted && existingTxns && existingTxns.length > 0) {
+        // completed から取り消された場合は、計上した収入も取り消す
+        await supabase.from('transactions').delete().eq('id', existingTxns[0].id)
       }
     }
 
@@ -125,6 +139,9 @@ export async function DELETE(
     if (staffError) return staffError
 
     const { id } = await params
+
+    await supabase.from('transactions').delete().ilike('description', `%[ref:${id}]%`)
+
     const { error } = await supabase
       .from('student_payments')
       .delete()

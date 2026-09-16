@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { StudentPayment, Student } from '@/types/database'
 import NewPaymentModal from './NewPaymentModal'
 
@@ -83,6 +83,22 @@ export default function PaymentHistoryTab() {
     'all'
   )
   const [showNewPayment, setShowNewPayment] = useState(false)
+  const [editingPayment, setEditingPayment] = useState<PaymentRow | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  async function deletePayment(id: string) {
+    if (!confirm('この支払い記録を削除しますか？（損益管理に計上済みの場合はその分も取り消されます）')) return
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/dashboard/payments/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setPayments(prev => prev.filter(p => p.id !== id))
+    } catch {
+      alert('削除に失敗しました')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const updatePayment = async (
     id: string,
@@ -183,6 +199,7 @@ export default function PaymentHistoryTab() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">種別</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">ステータス</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-700">助成クーポン</th>
+                <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
             <tbody>
@@ -224,6 +241,12 @@ export default function PaymentHistoryTab() {
                   <td className="px-4 py-3">
                     <SubsidyCell payment={payment} onUpdate={updatePayment} />
                   </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setEditingPayment(payment)} title="編集" className="p-1 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded"><Pencil size={14} /></button>
+                      <button onClick={() => deletePayment(payment.id)} disabled={deletingId === payment.id} title="削除" className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded disabled:opacity-50"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -237,6 +260,19 @@ export default function PaymentHistoryTab() {
           onClose={() => setShowNewPayment(false)}
           onSaved={() => {
             setShowNewPayment(false)
+            fetchPayments()
+          }}
+        />
+      )}
+
+      {editingPayment && (
+        <NewPaymentModal
+          students={students}
+          payment={editingPayment}
+          studentName={editingPayment.students?.name}
+          onClose={() => setEditingPayment(null)}
+          onSaved={() => {
+            setEditingPayment(null)
             fetchPayments()
           }}
         />
