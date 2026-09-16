@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import type { Student, PaymentType, PaymentStatus } from '@/types/database'
+import type { Student, PaymentType, PaymentStatus, StudentPayment } from '@/types/database'
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
 
@@ -13,26 +13,35 @@ function todayStr() {
 
 export default function NewPaymentModal({
   students,
+  payment,
+  studentName,
   onClose,
   onSaved,
 }: {
   students: Student[]
+  payment?: StudentPayment
+  studentName?: string
   onClose: () => void
   onSaved: () => void
 }) {
-  const [studentId, setStudentId] = useState('')
-  const [amount, setAmount] = useState('')
-  const [paymentDate, setPaymentDate] = useState(todayStr())
-  const [paymentType, setPaymentType] = useState<PaymentType>('manual')
-  const [status, setStatus] = useState<PaymentStatus>('completed')
-  const [subsidyAmount, setSubsidyAmount] = useState('')
-  const [notes, setNotes] = useState('')
+  const isEdit = !!payment
+  const [studentId, setStudentId] = useState(payment?.student_id ?? '')
+  const [amount, setAmount] = useState(payment ? String(payment.amount) : '')
+  const [paymentDate, setPaymentDate] = useState(payment?.payment_date ?? todayStr())
+  const [paymentType, setPaymentType] = useState<PaymentType>(payment?.payment_type ?? 'manual')
+  const [status, setStatus] = useState<PaymentStatus>(payment?.status ?? 'completed')
+  const [subsidyAmount, setSubsidyAmount] = useState(payment ? String(payment.subsidy_amount || '') : '')
+  const [notes, setNotes] = useState(payment?.notes ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleSave() {
-    if (!studentId || !amount || Number(amount) <= 0) {
+    if (!isEdit && (!studentId || !amount || Number(amount) <= 0)) {
       setError('生徒と金額は必須です')
+      return
+    }
+    if (isEdit && (!amount || Number(amount) <= 0)) {
+      setError('金額を入力してください')
       return
     }
     const subsidy = Number(subsidyAmount) || 0
@@ -43,20 +52,34 @@ export default function NewPaymentModal({
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch('/api/dashboard/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student_id: studentId,
-          amount: Number(amount),
-          payment_date: paymentDate,
-          payment_type: paymentType,
-          status,
-          subsidy_amount: subsidy,
-          subsidy_received: false,
-          notes: notes || null,
-        }),
-      })
+      const res = isEdit
+        ? await fetch(`/api/dashboard/payments/${payment!.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              amount: Number(amount),
+              payment_date: paymentDate,
+              payment_type: paymentType,
+              status,
+              subsidy_amount: subsidy,
+              subsidy_received: payment!.subsidy_received,
+              notes: notes || null,
+            }),
+          })
+        : await fetch('/api/dashboard/payments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              student_id: studentId,
+              amount: Number(amount),
+              payment_date: paymentDate,
+              payment_type: paymentType,
+              status,
+              subsidy_amount: subsidy,
+              subsidy_received: false,
+              notes: notes || null,
+            }),
+          })
       if (!res.ok) throw new Error('保存に失敗しました')
       onSaved()
     } catch {
@@ -70,22 +93,29 @@ export default function NewPaymentModal({
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800">支払いを記録</h2>
+          <h2 className="text-lg font-bold text-gray-800">{isEdit ? '支払いを編集' : '支払いを記録'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
         <div className="p-6 space-y-4">
           {error && <div className="bg-red-50 text-red-600 text-sm px-3 py-2 rounded-lg">{error}</div>}
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">生徒 *</label>
-            <select value={studentId} onChange={e => setStudentId(e.target.value)} className={inputCls}>
-              <option value="">選択してください</option>
-              {students.filter(s => s.is_active).map(s => (
-                <option key={s.id} value={s.id}>{s.name}{s.subsidy_program ? '（助成対象）' : ''}</option>
-              ))}
-            </select>
-          </div>
+          {isEdit ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">生徒</label>
+              <p className="text-sm text-gray-800 px-1 py-1.5">{studentName ?? '-'}</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">生徒 *</label>
+              <select value={studentId} onChange={e => setStudentId(e.target.value)} className={inputCls}>
+                <option value="">選択してください</option>
+                {students.filter(s => s.is_active).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}{s.subsidy_program ? '（助成対象）' : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">金額（円） *</label>
