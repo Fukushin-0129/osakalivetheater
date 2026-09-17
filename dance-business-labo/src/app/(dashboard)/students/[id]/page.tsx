@@ -164,7 +164,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             {student.family_group}
           </span>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <Link href={`/students?edit=${student.id}`} className="px-3 py-1.5 rounded-lg text-sm font-medium text-indigo-600 border border-indigo-200 hover:bg-indigo-50">
+            編集
+          </Link>
           <StudentQrCode studentName={student.name} qrToken={student.qr_token} />
         </div>
       </div>

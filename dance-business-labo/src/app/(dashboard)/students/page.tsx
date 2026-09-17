@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Student } from '@/types/database'
 import { Plus, Search, Pencil, Trash2, Users, UserCheck, UserMinus, X, Loader2, Camera, Check, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
@@ -89,6 +90,8 @@ export default function StudentsPage() {
   const [originalDataUrl, setOriginalDataUrl] = useState<string | null>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const supabase = createClient()
+  const router = useRouter()
+  const [returnToDetailId, setReturnToDetailId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -179,8 +182,22 @@ export default function StudentsPage() {
     setFormError(null)
     setAvatarFile(null)
     setAvatarPreview(null)
+    setReturnToDetailId(null)
     setShowModal(true)
   }
+
+  // 生徒詳細ページの「編集」リンク（?edit=<id>）から来た場合、自動で編集モーダルを開く
+  useEffect(() => {
+    if (loading) return
+    const editId = new URLSearchParams(window.location.search).get('edit')
+    if (!editId) return
+    const target = students.find(s => s.id === editId)
+    if (target) {
+      openEdit(target)
+      setReturnToDetailId(editId)
+    }
+    window.history.replaceState(null, '', '/students')
+  }, [loading])
 
   function openEdit(s: Student) {
     setEditing(s)
@@ -342,7 +359,11 @@ export default function StudentsPage() {
       setShowModal(false)
       setAvatarFile(null)
       setAvatarPreview(null)
-      load()
+      if (returnToDetailId) {
+        router.push(`/students/${returnToDetailId}`)
+      } else {
+        load()
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       console.error('Failed to save student:', e)
@@ -583,7 +604,7 @@ export default function StudentsPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => openEdit(s)} className="text-gray-400 hover:text-indigo-600 mr-2 p-1 rounded hover:bg-indigo-50 transition-colors">
+                    <button onClick={() => { setReturnToDetailId(null); openEdit(s) }} className="text-gray-400 hover:text-indigo-600 mr-2 p-1 rounded hover:bg-indigo-50 transition-colors">
                       <Pencil size={14} />
                     </button>
                     <button onClick={() => handleDelete(s)} className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
