@@ -53,6 +53,9 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [copyingFromPrevious, setCopyingFromPrevious] = useState(false)
+  const [showCopySourcePicker, setShowCopySourcePicker] = useState(false)
+  const [copySourceCandidates, setCopySourceCandidates] = useState<Lesson[]>([])
+  const [loadingCopySources, setLoadingCopySources] = useState(false)
   // 計画編集モードでの並び替え（ドラッグ＆ドロップ）
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
@@ -397,10 +400,36 @@ ${planSummary || '（未設定）'}`
   async function copyFromPreviousWeek() {
     if (!lesson) return
     if (!window.confirm('前週の同じ時間のレッスンからカリキュラムをコピーします。よろしいですか？')) return
+    await runCopyCurriculum()
+  }
+
+  async function openCopySourcePicker() {
+    if (!lesson) return
+    setShowCopySourcePicker(true)
+    setLoadingCopySources(true)
+    try {
+      const { data } = await supabase
+        .from('lessons')
+        .select('*, lesson_types(*)')
+        .eq('lesson_type_id', lesson.lesson_type_id)
+        .lt('scheduled_at', lesson.scheduled_at)
+        .neq('id', lesson.id)
+        .order('scheduled_at', { ascending: false })
+        .limit(20)
+      setCopySourceCandidates((data as Lesson[]) ?? [])
+    } finally {
+      setLoadingCopySources(false)
+    }
+  }
+
+  async function runCopyCurriculum(sourceLessonId?: string) {
+    if (!lesson) return
     setCopyingFromPrevious(true)
     try {
       const res = await fetch(`/api/lessons/${lesson.id}/copy-curriculum`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sourceLessonId ? { source_lesson_id: sourceLessonId } : {}),
       })
       if (!res.ok) {
         const error = await res.json()
@@ -409,6 +438,7 @@ ${planSummary || '（未設定）'}`
       }
       const data = await res.json()
       alert(`✅ ${data.copied_from} からカリキュラムをコピーしました（${data.items_count}項目）`)
+      setShowCopySourcePicker(false)
       loadAll()
     } catch (error) {
       alert(`エラー: ${error instanceof Error ? error.message : '不明なエラー'}`)
@@ -471,12 +501,19 @@ ${planSummary || '（未設定）'}`
                       <div className="px-4 py-6 text-center text-gray-400 text-xs">
                         <p>計画項目がありません</p>
                         <button onClick={() => setPlanEditMode(true)} className="mt-2 text-indigo-500 hover:text-indigo-700 underline">項目を追加する</button>
-                        <button 
+                        <button
                           onClick={copyFromPreviousWeek}
                           disabled={copyingFromPrevious}
                           className="mt-2 block mx-auto text-amber-600 hover:text-amber-700 disabled:text-gray-300 underline"
                         >
                           {copyingFromPrevious ? 'コピー中...' : '前週のカリキュラムをコピー'}
+                        </button>
+                        <button
+                          onClick={openCopySourcePicker}
+                          disabled={copyingFromPrevious}
+                          className="mt-1 block mx-auto text-gray-400 hover:text-gray-600 disabled:text-gray-300 underline text-[11px]"
+                        >
+                          コピー元を選択する
                         </button>
                       </div>
                     ) : (
@@ -927,6 +964,46 @@ ${planSummary || '（未設定）'}`
               className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white p-2.5 rounded-xl transition-colors">
               {chatLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
+          </div>
+        </div>
+      )}
+
+      {showCopySourcePicker && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-bold text-gray-800">コピー元のレッスンを選択</h2>
+              <button onClick={() => setShowCopySourcePicker(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="overflow-y-auto px-3 py-2">
+              {loadingCopySources ? (
+                <div className="flex items-center justify-center py-10 text-gray-400">
+                  <Loader2 size={20} className="animate-spin mr-2" /> 読み込み中...
+                </div>
+              ) : copySourceCandidates.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-10">同じレッスン種別の過去のレッスンが見つかりません</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {copySourceCandidates.map(l => {
+                    const d = parseJST(l.scheduled_at)
+                    return (
+                      <li key={l.id}>
+                        <button
+                          onClick={() => runCopyCurriculum(l.id)}
+                          disabled={copyingFromPrevious}
+                          className="w-full text-left px-3 py-3 hover:bg-indigo-50 rounded-lg flex items-center justify-between disabled:opacity-50"
+                        >
+                          <span className="text-sm text-gray-700">{l.title}</span>
+                          <span className="text-xs text-gray-400">
+                            {d.getFullYear()}/{d.getMonth() + 1}/{d.getDate()}（{WEEKDAYS[d.getDay()]}）{String(d.getHours()).padStart(2, '0')}:{String(d.getMinutes()).padStart(2, '0')}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       )}
