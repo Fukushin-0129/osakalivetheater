@@ -921,7 +921,10 @@ export default function LessonsPage() {
                 <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="例: タップダンスレッスン" className={inputCls} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">レッスン種別</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600">レッスン種別</label>
+                  <Link href="/lessons/types" className="text-xs text-indigo-600 hover:underline">種別を管理</Link>
+                </div>
                 <select value={form.lesson_type_id} onChange={e => setForm(f => ({ ...f, lesson_type_id: e.target.value }))} className={inputCls}>
                   <option value="">選択しない</option>
                   {lessonTypes.map(lt => <option key={lt.id} value={lt.id}>{lt.name}（{lt.duration_minutes}分 / ¥{lt.price.toLocaleString()}）</option>)}
