@@ -8,6 +8,8 @@ export async function POST(
   try {
     const { id: lessonId } = await params
     const supabase = await createClient()
+    const body = await req.json().catch(() => ({}))
+    const sourceLessonId: string | undefined = body?.source_lesson_id
 
     // Get current lesson
     const { data: currentLesson, error: fetchError } = await supabase
@@ -20,27 +22,47 @@ export async function POST(
       throw new Error('Lesson not found')
     }
 
-    // Calculate previous week's date
-    const scheduledDate = new Date(currentLesson.scheduled_at)
-    const previousWeekDate = new Date(
-      scheduledDate.getTime() - 7 * 24 * 60 * 60 * 1000
-    )
+    let previousLesson: { id: string; title: string; scheduled_at: string } | null = null
 
-    // Find lesson from previous week (same time, within 30 minutes)
-    const { data: previousLessons, error: prevError } = await supabase
-      .from('lessons')
-      .select('*')
-      .gte('scheduled_at', new Date(previousWeekDate.getTime() - 30 * 60 * 1000).toISOString())
-      .lte('scheduled_at', new Date(previousWeekDate.getTime() + 30 * 60 * 1000).toISOString())
-      .neq('id', lessonId)
-      .order('scheduled_at', { ascending: false })
-      .limit(1)
+    if (sourceLessonId) {
+      // コピー元が明示的に指定された場合はそれを使う
+      const { data: specifiedLesson, error: specifiedError } = await supabase
+        .from('lessons')
+        .select('*')
+        .eq('id', sourceLessonId)
+        .single()
 
-    if (prevError) {
-      throw new Error(`Failed to find previous week lesson: ${prevError.message}`)
+      if (specifiedError || !specifiedLesson) {
+        return NextResponse.json(
+          { error: '指定されたコピー元のレッスンが見つかりません' },
+          { status: 404 }
+        )
+      }
+      previousLesson = specifiedLesson
+    } else {
+      // Calculate previous week's date
+      const scheduledDate = new Date(currentLesson.scheduled_at)
+      const previousWeekDate = new Date(
+        scheduledDate.getTime() - 7 * 24 * 60 * 60 * 1000
+      )
+
+      // Find lesson from previous week (same time, within 30 minutes)
+      const { data: previousLessons, error: prevError } = await supabase
+        .from('lessons')
+        .select('*')
+        .gte('scheduled_at', new Date(previousWeekDate.getTime() - 30 * 60 * 1000).toISOString())
+        .lte('scheduled_at', new Date(previousWeekDate.getTime() + 30 * 60 * 1000).toISOString())
+        .neq('id', lessonId)
+        .order('scheduled_at', { ascending: false })
+        .limit(1)
+
+      if (prevError) {
+        throw new Error(`Failed to find previous week lesson: ${prevError.message}`)
+      }
+
+      previousLesson = previousLessons?.[0] ?? null
     }
 
-    const previousLesson = previousLessons?.[0]
     if (!previousLesson) {
       return NextResponse.json(
         { error: '前週の同じ時間のレッスンが見つかりません' },
