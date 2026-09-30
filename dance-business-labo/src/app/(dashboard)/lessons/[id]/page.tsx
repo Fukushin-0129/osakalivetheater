@@ -408,15 +408,25 @@ ${planSummary || '（未設定）'}`
     setShowCopySourcePicker(true)
     setLoadingCopySources(true)
     try {
-      const { data } = await supabase
+      const base = () => supabase
         .from('lessons')
         .select('*, lesson_types(*)')
-        .eq('lesson_type_id', lesson.lesson_type_id)
         .lt('scheduled_at', lesson.scheduled_at)
         .neq('id', lesson.id)
         .order('scheduled_at', { ascending: false })
-        .limit(20)
-      setCopySourceCandidates((data as Lesson[]) ?? [])
+        .limit(30)
+
+      let data: Lesson[] | null = null
+      if (lesson.lesson_type_id) {
+        const res = await base().eq('lesson_type_id', lesson.lesson_type_id)
+        data = res.data as Lesson[] | null
+      }
+      // 同じ種別のレッスンが見つからない場合（種別未設定なども含む）は全件から選べるようにする
+      if (!data || data.length === 0) {
+        const res = await base()
+        data = res.data as Lesson[] | null
+      }
+      setCopySourceCandidates(data ?? [])
     } finally {
       setLoadingCopySources(false)
     }
