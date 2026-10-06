@@ -1,149 +1,125 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import type { Lesson } from '@/types/database'
-import { Calendar, MapPin, Users, Clock, CheckCircle, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { CalendarDays, CheckCircle, Clock, Loader2, MapPin, Users } from 'lucide-react'
 
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
+interface Lesson {
+  id: string
+  title: string
+  scheduled_at: string
+  location: string | null
+  max_capacity: number
+  enrolled_count: number
+  is_reserved: boolean
+  lesson_types: { name: string; duration_minutes: number } | null
+}
 
 export default function PortalReservePage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [loading, setLoading] = useState(true)
-  const [reserving, setReserving] = useState<string | null>(null)
-  const [reserved, setReserved] = useState<Set<string>>(new Set())
-  const [studentId, setStudentId] = useState<string | null>(null)
-  const supabase = createClient()
+  const [busyLesson, setBusyLesson] = useState<string | null>(null)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: student } = await supabase
-        .from('students')
-        .select('id')
-        .eq('email', user.email ?? '')
-        .single()
-
-      if (student) {
-        setStudentId(student.id)
-
-        const [{ data: ls }, { data: att }] = await Promise.all([
-          supabase.from('lessons').select('*').gte('scheduled_at', new Date().toISOString()).order('scheduled_at').limit(20),
-          supabase.from('attendance').select('lesson_id').eq('student_id', student.id),
-        ])
-        setLessons(ls ?? [])
-        setReserved(new Set((att ?? []).map(a => a.lesson_id)))
-      }
+  const loadLessons = useCallback(async () => {
+    setError('')
+    try {
+      const response = await fetch('/api/portal/lessons', { cache: 'no-store' })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'レッスンを読み込めませんでした')
+      setLessons(result.lessons ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'レッスンを読み込めませんでした')
+    } finally {
       setLoading(false)
     }
-    init()
   }, [])
 
-  async function handleReserve(lesson: Lesson) {
-    if (!studentId) return
-    setReserving(lesson.id)
-    if (reserved.has(lesson.id)) {
-      // キャンセル
-      await supabase.from('attendance').delete().eq('lesson_id', lesson.id).eq('student_id', studentId)
-      setReserved(prev => { const n = new Set(prev); n.delete(lesson.id); return n })
-    } else {
-      // 予約（出席記録として保存）
-      await supabase.from('attendance').upsert({
-        lesson_id: lesson.id,
-        student_id: studentId,
-        status: 'present',
-        ticket_used: false,
-      }, { onConflict: 'lesson_id,student_id' })
-      setReserved(prev => new Set([...prev, lesson.id]))
+  useEffect(() => { void loadLessons() }, [loadLessons])
+
+  async function updateReservation(lesson: Lesson) {
+    if (lesson.is_reserved && !window.confirm('このレッスンの予約をキャンセルしますか？')) return
+
+    setBusyLesson(lesson.id)
+    setError('')
+    setMessage('')
+    try {
+      const response = await fetch(
+        lesson.is_reserved
+          ? `/api/portal/lessons?lesson_id=${encodeURIComponent(lesson.id)}`
+          : '/api/portal/lessons',
+        lesson.is_reserved
+          ? { method: 'DELETE' }
+          : {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lesson_id: lesson.id }),
+            }
+      )
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || '予約を更新できませんでした')
+      setMessage(lesson.is_reserved ? '予約をキャンセルしました' : 'レッスンを予約しました')
+      await loadLessons()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '予約を更新できませんでした')
+    } finally {
+      setBusyLesson(null)
     }
-    setReserving(null)
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-gray-400">
-        <Loader2 size={24} className="animate-spin mr-2" /> 読み込み中...
-      </div>
-    )
+    return <div className="flex items-center justify-center py-20 text-gray-500"><Loader2 size={22} className="mr-2 animate-spin" />読み込み中...</div>
   }
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <Calendar size={20} className="text-indigo-500" /> レッスン予約
-        </h1>
-        <p className="text-gray-500 text-sm mt-1">参加したいレッスンを選んでください</p>
+      <div className="mb-5">
+        <h1 className="flex items-center gap-2 text-xl font-bold text-gray-800"><CalendarDays size={21} className="text-indigo-600" />レッスン予約・予定</h1>
+        <p className="mt-1 text-sm text-gray-600">参加したいレッスンを予約できます。</p>
       </div>
 
+      {message && <p role="status" className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">{message}</p>}
+      {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
       {lessons.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm p-12 text-center text-gray-400">
-          <Calendar size={32} className="mx-auto mb-3 opacity-20" />
-          <p className="text-sm">予定されているレッスンはありません</p>
+        <div className="rounded-xl bg-white p-8 text-center text-gray-500 shadow-sm">
+          <CalendarDays size={30} className="mx-auto mb-3 text-gray-300" />
+          <p className="font-medium">現在、予約できるレッスンはありません</p>
+          <p className="mt-1 text-sm">新しいレッスンが登録されると、ここに表示されます。</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {lessons.map(l => {
-            const dt = new Date(l.scheduled_at)
-            const isReserved = reserved.has(l.id)
-            const isReserving = reserving === l.id
-            const dayOfWeek = dt.getDay()
+          {lessons.map((lesson) => {
+            const date = new Date(lesson.scheduled_at)
+            const full = lesson.enrolled_count >= lesson.max_capacity
+            const isBusy = busyLesson === lesson.id
+
             return (
-              <div key={l.id} className={`bg-white rounded-xl shadow-sm p-4 flex items-center gap-4 transition-all ${isReserved ? 'border-2 border-indigo-400' : 'border-2 border-transparent'}`}>
-                {/* 日付 */}
-                <div className="flex-shrink-0 w-14 text-center">
-                  <div className={`text-2xl font-bold ${dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : 'text-gray-800'}`}>
-                    {dt.getDate()}
-                  </div>
-                  <div className={`text-xs font-medium ${dayOfWeek === 0 ? 'text-red-400' : dayOfWeek === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
-                    {dt.toLocaleDateString('ja-JP', { month: 'numeric' })}月{WEEKDAYS[dayOfWeek]}
+              <article key={lesson.id} className={`grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 gap-y-3 rounded-xl border bg-white p-4 shadow-sm sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] sm:items-center ${lesson.is_reserved ? 'border-indigo-300' : 'border-gray-100'}`}>
+                <div className="row-span-2 self-start text-center sm:row-span-1 sm:self-center">
+                  <div className="text-2xl font-bold leading-tight text-indigo-700">{date.getDate()}</div>
+                  <div className="text-xs text-gray-500">{date.toLocaleDateString('ja-JP', { month: 'short', weekday: 'short' })}</div>
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="break-words font-semibold text-gray-900">{lesson.title}</h2>
+                  {lesson.lesson_types?.name && <p className="mt-0.5 text-xs text-gray-500">{lesson.lesson_types.name}</p>}
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+                    <span className="inline-flex items-center gap-1"><Clock size={13} />{date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}{lesson.lesson_types?.duration_minutes ? `（${lesson.lesson_types.duration_minutes}分）` : ''}</span>
+                    {lesson.location && <span className="inline-flex items-center gap-1"><MapPin size={13} />{lesson.location}</span>}
+                    <span className="inline-flex items-center gap-1"><Users size={13} />{lesson.enrolled_count}/{lesson.max_capacity}名</span>
                   </div>
                 </div>
 
-                {/* 区切り */}
-                <div className="w-px h-12 bg-gray-100 flex-shrink-0" />
-
-                {/* 詳細 */}
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-800 text-sm">{l.title}</div>
-                  <div className="flex flex-wrap gap-x-3 mt-1">
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
-                      <Clock size={11} />
-                      {dt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                      {l.lesson_types && ` (${(l.lesson_types as { duration_minutes: number }).duration_minutes}分)`}
-                    </span>
-                    {l.location && (
-                      <span className="flex items-center gap-1 text-xs text-gray-400">
-                        <MapPin size={11} /> {l.location}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1 text-xs text-gray-400">
-                      <Users size={11} /> 定員{l.max_capacity}名
-                    </span>
-                  </div>
-                </div>
-
-                {/* 予約ボタン */}
                 <button
-                  onClick={() => handleReserve(l)}
-                  disabled={isReserving}
-                  className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                    isReserved
-                      ? 'bg-indigo-100 text-indigo-700 hover:bg-red-50 hover:text-red-600'
-                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                  }`}
+                  type="button"
+                  onClick={() => void updateReservation(lesson)}
+                  disabled={isBusy || (!lesson.is_reserved && full)}
+                  className={`col-span-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-1 sm:w-auto ${lesson.is_reserved ? 'bg-indigo-50 text-indigo-700 hover:bg-red-50 hover:text-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                 >
-                  {isReserving ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : isReserved ? (
-                    <><CheckCircle size={14} /> 予約済</>
-                  ) : (
-                    '予約する'
-                  )}
+                  {isBusy ? <Loader2 size={16} className="animate-spin" /> : lesson.is_reserved ? <><CheckCircle size={16} />予約済み・キャンセル</> : full ? '満席' : '予約する'}
                 </button>
-              </div>
+              </article>
             )
           })}
         </div>

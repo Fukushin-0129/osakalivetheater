@@ -1,21 +1,14 @@
-import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
 import { FileText } from 'lucide-react'
 
 export default async function PortalRecordsPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  const { data: student } = await supabase
-    .from('students')
-    .select('id, name')
-    .eq('email', user?.email ?? '')
-    .single()
+  const { student, admin } = await getAuthenticatedPortalStudent()
 
   if (!student) {
     return <p className="text-center text-gray-500 py-16">生徒情報が見つかりません</p>
   }
 
-  const { data: records } = await supabase
+  const { data: records } = await admin!
     .from('student_records')
     .select('*')
     .eq('student_id', student.id)

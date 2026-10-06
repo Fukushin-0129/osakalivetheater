@@ -1,17 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
 import Link from 'next/link'
 import { Ticket, FileText, Calendar, AlertTriangle, Clock } from 'lucide-react'
 
 export default async function PortalPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // メールアドレスで生徒を特定
-  const { data: student } = await supabase
-    .from('students')
-    .select('*')
-    .eq('email', user?.email ?? '')
-    .single()
+  const { user, student, admin } = await getAuthenticatedPortalStudent()
 
   if (!student) {
     return (
@@ -27,24 +19,30 @@ export default async function PortalPage() {
     )
   }
 
-  const today = new Date().toISOString().split('T')[0]
-
-  const [{ data: tickets }, { data: records }, { data: upcomingLessons }] = await Promise.all([
-    supabase.from('student_tickets')
+  const [{ data: tickets }, { data: records }, { data: reservations }] = await Promise.all([
+    admin!.from('student_tickets')
       .select('*, ticket_types(name)')
       .eq('student_id', student.id)
       .order('expires_at'),
-    supabase.from('student_records')
+    admin!.from('student_records')
       .select('*')
       .eq('student_id', student.id)
       .order('record_date', { ascending: false })
       .limit(3),
-    supabase.from('lessons')
-      .select('*')
-      .gte('scheduled_at', new Date().toISOString())
-      .order('scheduled_at')
-      .limit(5),
+    admin!.from('student_reservations')
+      .select('lesson_id')
+      .eq('student_id', student.id),
   ])
+
+  const reservationLessonIds = (reservations ?? []).map((reservation) => reservation.lesson_id)
+  const { data: upcomingLessons } = reservationLessonIds.length
+    ? await admin!.from('lessons')
+        .select('id, title, scheduled_at, location')
+        .in('id', reservationLessonIds)
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at')
+        .limit(5)
+    : { data: [] }
 
   const activeTickets = (tickets ?? []).filter(t =>
     t.total_count - t.used_count > 0 && (!t.expires_at || new Date(t.expires_at) >= new Date())

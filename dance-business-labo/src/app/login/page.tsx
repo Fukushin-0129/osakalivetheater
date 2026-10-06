@@ -54,25 +54,10 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
 
-        // 生徒か先生かを判定
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-        const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        const studentRes = await fetch(
-          `${supabaseUrl}/rest/v1/students?email=eq.${encodeURIComponent(email)}&select=id`,
-          {
-            headers: {
-              apikey: anonKey!,
-              Authorization: `Bearer ${anonKey}`,
-            },
-          }
-        )
-        const students = await studentRes.json()
-
-        if (Array.isArray(students) && students.length > 0) {
-          router.push('/portal')
-        } else {
-          router.push('/')
-        }
+        const destinationRes = await fetch('/api/auth/destination', { cache: 'no-store' })
+        if (!destinationRes.ok) throw new Error('ログイン先を確認できませんでした。もう一度お試しください')
+        const { destination } = await destinationRes.json()
+        router.replace(destination === '/portal' ? '/portal' : '/')
         return
       }
 
