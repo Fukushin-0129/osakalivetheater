@@ -43,6 +43,9 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedEval, setSavedEval] = useState(false)
+  // 未保存の評価入力がある間に他ページへ移動しようとしたら確認する
+  const [evalDirty, setEvalDirty] = useState(false)
+  const evalDirtyRef = useRef(false)
   const [newItemParent, setNewItemParent] = useState<{ parentId: string | null; level: number } | null>(null)
   const [newItemName, setNewItemName] = useState('')
   // 計画パネルの開閉（モバイル用）
@@ -84,6 +87,38 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     const onMouseUp = () => setGrabbedId(null)
     window.addEventListener('mouseup', onMouseUp)
     return () => window.removeEventListener('mouseup', onMouseUp)
+  }, [])
+
+  // 未保存の評価がある状態でページを離れようとしたら確認する
+  useEffect(() => { evalDirtyRef.current = evalDirty }, [evalDirty])
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      if (!evalDirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    function onClickCapture(e: MouseEvent) {
+      if (!evalDirtyRef.current) return
+      const anchor = (e.target as HTMLElement).closest('a')
+      if (!anchor) return
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#')) return
+      const destination = new URL(href, window.location.href)
+      if (destination.href === window.location.href) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (window.confirm('評価の入力内容が保存されていません。保存せずに移動しますか？')) {
+        evalDirtyRef.current = false
+        setEvalDirty(false)
+        window.location.href = destination.href
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('click', onClickCapture, true)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('click', onClickCapture, true)
+    }
   }, [])
 
   async function loadAll() {
@@ -262,10 +297,12 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
         },
       },
     }))
+    setEvalDirty(true)
   }
 
   function setOverallNote(studentId: string, value: string) {
     setOverallNotes(prev => ({ ...prev, [studentId]: value }))
+    setEvalDirty(true)
   }
 
   async function saveEvaluations() {
@@ -354,6 +391,7 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     await loadAll()
     setSaving(false)
     setSavedEval(true)
+    setEvalDirty(false)
     setTimeout(() => setSavedEval(false), 3000)
   }
 
