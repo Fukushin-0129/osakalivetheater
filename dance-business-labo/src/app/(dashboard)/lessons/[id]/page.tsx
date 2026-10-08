@@ -120,9 +120,16 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
 
   const planItemIds = new Set(planItems.map(p => p.curriculum_item_id))
 
+  // 項目とその配下（中項目→小項目、大項目→中項目・小項目）のIDを再帰的に集める
+  function collectIds(item: CurriculumItem): string[] {
+    return [item.id, ...(item.children ?? []).flatMap(collectIds)]
+  }
+
   async function togglePlanItem(item: CurriculumItem) {
     if (planItemIds.has(item.id)) {
-      await supabase.from('lesson_plan_items').delete().eq('lesson_id', lessonId).eq('curriculum_item_id', item.id)
+      // チェックを外した項目に加えて、配下の項目も計画から外す
+      const idsToRemove = collectIds(item)
+      await supabase.from('lesson_plan_items').delete().eq('lesson_id', lessonId).in('curriculum_item_id', idsToRemove)
     } else {
       const inserts: { lesson_id: string; curriculum_item_id: string; display_order: number }[] = [
         { lesson_id: lessonId, curriculum_item_id: item.id, display_order: planItems.length },
@@ -648,14 +655,20 @@ ${planSummary || '（未設定）'}`
                     </div>
                     {curriculumTree.map(root => (
                       <div key={root.id}>
-                        <button
-                          onClick={() => setExpandedItems(prev => {
-                            const next = new Set(prev); next.has(root.id) ? next.delete(root.id) : next.add(root.id); return next
-                          })}
-                          className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100">
-                          <span className="font-semibold text-gray-800 text-sm">{root.name}</span>
-                          {expandedItems.has(root.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                        </button>
+                        <div className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-100">
+                          <button onClick={() => togglePlanItem(root)}
+                            className={`w-4 h-4 rounded flex-shrink-0 border-2 transition-colors flex items-center justify-center ${planItemIds.has(root.id) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 hover:border-indigo-400'}`}>
+                            {planItemIds.has(root.id) && <span className="text-white text-[10px] font-bold">✓</span>}
+                          </button>
+                          <button
+                            onClick={() => setExpandedItems(prev => {
+                              const next = new Set(prev); next.has(root.id) ? next.delete(root.id) : next.add(root.id); return next
+                            })}
+                            className="flex-1 flex items-center justify-between text-left">
+                            <span className="font-semibold text-gray-800 text-sm">{root.name}</span>
+                            {expandedItems.has(root.id) ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                          </button>
+                        </div>
                         {expandedItems.has(root.id) && (
                           <div className="border-b border-gray-100">
                             {(root.children ?? []).map(mid => (
