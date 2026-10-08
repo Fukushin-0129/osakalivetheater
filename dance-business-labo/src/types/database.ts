@@ -52,6 +52,15 @@ export type Lesson = {
   lesson_plans?: LessonPlan
 }
 
+export type LessonVideo = {
+  id: string
+  lesson_id: string
+  url: string
+  label: string | null
+  display_order: number
+  created_at: string
+}
+
 export type LessonPlan = {
   id: string
   lesson_id: string
