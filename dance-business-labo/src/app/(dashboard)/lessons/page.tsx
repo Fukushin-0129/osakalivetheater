@@ -8,7 +8,7 @@ import Link from 'next/link'
 
 type ViewMode = 'list' | 'calendar'
 type AttendanceWithStudent = { count: number; students: { name: string; name_kana: string | null } | null; status: string }
-type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[] }
+type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[]; lesson_videos?: { url: string }[] }
 type AttendeeInfo = { id: string; student_id: string; status: string; students: { name: string; name_kana: string | null } | null }
 type AttendeeModal = { lessonId: string; lessonTitle: string; lessonDate: string } | null
 type SubRecord = { id: string; original_lesson_id: string; substitute_lesson_id: string | null; reason: string | null; price_difference: number; notes: string | null }
@@ -26,6 +26,11 @@ function parseJST(s: string): Date {
   const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
   const [h, min] = clean.slice(11).split(':').map(Number)
   return new Date(y, m - 1, d, h, min)
+}
+
+function getYouTubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/)
+  return m ? m[1] : null
 }
 
 function todayStr() {
@@ -90,7 +95,7 @@ export default function LessonsPage() {
     const start = `${year}-01-01T00:00:00`
     const end = `${year + 1}-01-01T00:00:00`
     const [{ data: l }, { data: lt }] = await Promise.all([
-      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana))').gte('scheduled_at', start).lt('scheduled_at', end).order('scheduled_at', { ascending: true }),
+      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana)), lesson_videos(url)').gte('scheduled_at', start).lt('scheduled_at', end).order('scheduled_at', { ascending: true }),
       supabase.from('lesson_types').select('*').order('name'),
     ])
     setLessons((l ?? []) as LessonWithCount[])
@@ -473,7 +478,15 @@ export default function LessonsPage() {
                               </div>
                             </td>
                             <td className="px-4 py-3 align-top">
-                              <div className="font-medium text-gray-800">{l.title}</div>
+                              <div className="flex items-center gap-2">
+                                {(() => {
+                                  const ytId = l.lesson_videos?.[0] ? getYouTubeId(l.lesson_videos[0].url) : null
+                                  return ytId ? (
+                                    <img src={`https://img.youtube.com/vi/${ytId}/default.jpg`} alt="" className="w-10 h-[22px] object-cover rounded flex-shrink-0" title="動画あり" />
+                                  ) : null
+                                })()}
+                                <div className="font-medium text-gray-800">{l.title}</div>
+                              </div>
                               {lt && <span className="inline-block mt-0.5 px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full">{lt.name}</span>}
                             </td>
                             <td className="px-4 py-3 hidden md:table-cell align-top">
@@ -568,7 +581,15 @@ export default function LessonsPage() {
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 align-top">
-                                  <div className="font-medium text-gray-600">{l.title}</div>
+                                  <div className="flex items-center gap-2">
+                                    {(() => {
+                                      const ytId = l.lesson_videos?.[0] ? getYouTubeId(l.lesson_videos[0].url) : null
+                                      return ytId ? (
+                                        <img src={`https://img.youtube.com/vi/${ytId}/default.jpg`} alt="" className="w-10 h-[22px] object-cover rounded flex-shrink-0 opacity-80" title="動画あり" />
+                                      ) : null
+                                    })()}
+                                    <div className="font-medium text-gray-600">{l.title}</div>
+                                  </div>
                                   {lt && <span className="inline-block mt-0.5 px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">{lt.name}</span>}
                                 </td>
                                 <td className="px-4 py-3 hidden md:table-cell align-top">
