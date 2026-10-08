@@ -13,3 +13,5 @@ create index if not exists lesson_videos_lesson_id_idx on lesson_videos(lesson_i
 alter table lesson_videos enable row level security;
 drop policy if exists staff_all on lesson_videos;
 create policy staff_all on lesson_videos for all to authenticated using (is_staff()) with check (is_staff());
+
+grant select, insert, update, delete on lesson_videos to authenticated;
