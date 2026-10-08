@@ -15,6 +15,8 @@ export async function GET() {
     .from('students')
     .select('id')
     .eq('email', user.email)
+    // Duplicate student rows can exist during data cleanup. Any match means this is a student account.
+    .limit(1)
     .maybeSingle()
 
   if (error) {
