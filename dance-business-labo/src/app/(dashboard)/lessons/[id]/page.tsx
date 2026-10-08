@@ -2,17 +2,27 @@
 
 import { useEffect, useState, use, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Lesson, LessonType, CurriculumItem, LessonPlanItem, LessonEvaluation, Student } from '@/types/database'
-import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X, GripVertical } from 'lucide-react'
+import type { Lesson, LessonType, CurriculumItem, LessonPlanItem, LessonEvaluation, Student, LessonVideo } from '@/types/database'
+import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X, GripVertical, Video } from 'lucide-react'
 import Link from 'next/link'
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
+const MAX_LESSON_VIDEOS = 3
 
 function parseJST(s: string): Date {
   const clean = s.slice(0, 16).replace(' ', 'T')
   const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
   const [h, min] = clean.slice(11).split(':').map(Number)
   return new Date(y, m - 1, d, h, min)
+}
+
+function getYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url)
+    if (u.hostname.includes('youtube.com')) return u.searchParams.get('v')
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1)
+  } catch {}
+  return null
 }
 
 type AttendingStudent = { student_id: string; students: Student | null; notes: string | null }
@@ -56,6 +66,12 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [showCopySourcePicker, setShowCopySourcePicker] = useState(false)
   const [copySourceCandidates, setCopySourceCandidates] = useState<Lesson[]>([])
   const [loadingCopySources, setLoadingCopySources] = useState(false)
+  // レッスン動画（YouTube限定公開）
+  const [lessonVideos, setLessonVideos] = useState<LessonVideo[]>([])
+  const [newVideoUrl, setNewVideoUrl] = useState('')
+  const [newVideoLabel, setNewVideoLabel] = useState('')
+  const [addingVideo, setAddingVideo] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
   // 計画編集モードでの並び替え（ドラッグ＆ドロップ）
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
@@ -78,15 +94,18 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
       { data: planData },
       { data: attendData },
       { data: evalData },
+      { data: videoData },
     ] = await Promise.all([
       supabase.from('lessons').select('*, lesson_types(*)').eq('id', lessonId).single(),
       supabase.from('curriculum_items').select('*').order('display_order').order('created_at'),
       supabase.from('lesson_plan_items').select('*, curriculum_items(*)').eq('lesson_id', lessonId),
       supabase.from('attendance').select('student_id, notes, students(*)').eq('lesson_id', lessonId).in('status', ['present', 'late']),
       supabase.from('lesson_evaluations').select('*').eq('lesson_id', lessonId),
+      supabase.from('lesson_videos').select('*').eq('lesson_id', lessonId).order('display_order'),
     ])
 
     setLesson(lessonData as any)
+    setLessonVideos((videoData ?? []) as LessonVideo[])
 
     const flat: CurriculumItem[] = currData ?? []
     const roots = flat.filter(i => !i.parent_id)
@@ -145,6 +164,41 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
       plan_status: (data?.length ?? 0) > 0 ? 'planned' : 'not_planned',
       plan_generated_at: new Date().toISOString(),
     }).eq('id', lessonId)
+  }
+
+  async function addLessonVideo() {
+    setVideoError(null)
+    const url = newVideoUrl.trim()
+    if (!url) return
+    if (!getYouTubeId(url)) {
+      setVideoError('YouTubeのURLとして認識できませんでした')
+      return
+    }
+    if (lessonVideos.length >= MAX_LESSON_VIDEOS) {
+      setVideoError(`動画は1レッスンにつき最大${MAX_LESSON_VIDEOS}本までです`)
+      return
+    }
+    setAddingVideo(true)
+    const { data, error } = await supabase.from('lesson_videos').insert([{
+      lesson_id: lessonId,
+      url,
+      label: newVideoLabel.trim() || null,
+      display_order: lessonVideos.length,
+    }]).select()
+    setAddingVideo(false)
+    if (error) {
+      setVideoError(`保存に失敗しました: ${error.message}`)
+      return
+    }
+    setLessonVideos(prev => [...prev, ...(data as LessonVideo[])])
+    setNewVideoUrl('')
+    setNewVideoLabel('')
+  }
+
+  async function deleteLessonVideo(id: string) {
+    if (!window.confirm('この動画リンクを削除しますか？')) return
+    await supabase.from('lesson_videos').delete().eq('id', id)
+    setLessonVideos(prev => prev.filter(v => v.id !== id))
   }
 
   async function updatePlanNotes(planItemId: string, notes: string) {
@@ -489,6 +543,58 @@ ${planSummary || '（未設定）'}`
           <h1 className="text-xl font-bold text-gray-800">{lessonLabel}</h1>
           {lesson.location && <p className="text-sm text-gray-500 mt-0.5">{lesson.location}</p>}
         </div>
+      </div>
+
+      {/* レッスン動画（YouTube限定公開） */}
+      <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Video size={15} className="text-indigo-600" />
+          <h2 className="font-semibold text-gray-700 text-sm">レッスン動画</h2>
+          <span className="text-xs text-gray-400">(YouTube限定公開・最大{MAX_LESSON_VIDEOS}本)</span>
+        </div>
+
+        {lessonVideos.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+            {lessonVideos.map(v => {
+              const ytId = getYouTubeId(v.url)
+              return (
+                <div key={v.id} className="relative group">
+                  <a href={v.url} target="_blank" rel="noopener noreferrer" className="block">
+                    {ytId ? (
+                      <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt={v.label ?? 'レッスン動画'}
+                        className="w-full aspect-video object-cover rounded-lg border border-gray-200" />
+                    ) : (
+                      <div className="w-full aspect-video rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center text-gray-300">
+                        <Video size={20} />
+                      </div>
+                    )}
+                  </a>
+                  {v.label && <p className="text-xs text-gray-500 mt-1 truncate">{v.label}</p>}
+                  <button onClick={() => deleteLessonVideo(v.id)}
+                    className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {lessonVideos.length < MAX_LESSON_VIDEOS && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input value={newVideoUrl} onChange={e => setNewVideoUrl(e.target.value)}
+              placeholder="YouTube限定公開の動画URL"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input value={newVideoLabel} onChange={e => setNewVideoLabel(e.target.value)}
+              placeholder="メモ（任意）"
+              className="sm:w-40 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <button onClick={addLessonVideo} disabled={addingVideo || !newVideoUrl.trim()}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap">
+              {addingVideo ? '追加中...' : '追加'}
+            </button>
+          </div>
+        )}
+        {videoError && <p className="text-xs text-red-500 mt-2">{videoError}</p>}
       </div>
 
       {/* 2カラムレイアウト（lg以上）/ スタックレイアウト（モバイル） */}
