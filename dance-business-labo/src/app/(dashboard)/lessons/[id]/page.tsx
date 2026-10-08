@@ -609,8 +609,8 @@ ${planSummary || '（未設定）'}`
                   </a>
                   {v.label && <p className="text-xs text-gray-500 mt-1 truncate">{v.label}</p>}
                   <button onClick={() => deleteLessonVideo(v.id)}
-                    className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Trash2 size={12} />
+                    className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-opacity">
+                    <Trash2 size={14} />
                   </button>
                 </div>
               )
