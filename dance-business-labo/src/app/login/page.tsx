@@ -54,10 +54,9 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
 
-        const destinationRes = await fetch('/api/auth/destination', { cache: 'no-store' })
-        if (!destinationRes.ok) throw new Error('ログイン先を確認できませんでした。もう一度お試しください')
-        const { destination } = await destinationRes.json()
-        router.replace(destination === '/portal' ? '/portal' : '/')
+        // 管理者/生徒の振り分けは各レイアウト側で行うため、ここでは単純に '/' へ遷移する
+        router.replace('/')
+        router.refresh()
         return
       }
 
