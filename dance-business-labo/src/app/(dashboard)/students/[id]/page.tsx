@@ -9,6 +9,16 @@ import VideoThumb from '@/components/VideoThumb'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
 
+// DBに保存されたタイムスタンプはタイムゾーンなし文字列として扱い、
+// そのまま日本時間として解釈する（UTC変換しない）
+function parseJST(s: string): Date {
+  const clean = s.slice(0, 16).replace(' ', 'T')
+  const [datePart, timePart] = clean.split('T')
+  const [y, m, d] = datePart.split('-').map(Number)
+  const [h, min] = (timePart ?? '00:00').split(':').map(Number)
+  return new Date(y, m - 1, d, h, min)
+}
+
 type AttendanceRecord = {
   id: string
   status: string
@@ -21,7 +31,7 @@ function AttendanceCalendar({ records }: { records: AttendanceRecord[] }) {
   for (const a of records) {
     const dt = a.lessons?.scheduled_at
     if (!dt) continue
-    const d = new Date(dt)
+    const d = parseJST(dt)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     if (!monthMap.has(key)) monthMap.set(key, new Set())
     if (a.status === 'present' || a.status === 'late') {
@@ -98,7 +108,7 @@ function AttendanceList({ records }: { records: AttendanceRecord[] }) {
             <div>
               <span className="text-gray-700">{lesson?.title}</span>
               <span className="text-gray-400 ml-2 text-xs">
-                {lesson?.scheduled_at && new Date(lesson.scheduled_at).toLocaleDateString('ja-JP')}
+                {lesson?.scheduled_at && parseJST(lesson.scheduled_at).toLocaleDateString('ja-JP')}
               </span>
             </div>
             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[a.status as keyof typeof statusColor]}`}>

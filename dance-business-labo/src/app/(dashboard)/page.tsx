@@ -1,6 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { Users, Calendar, TrendingUp, ClipboardCheck } from 'lucide-react'
 
+// DBに保存されたタイムスタンプはタイムゾーンなし文字列として扱い、
+// そのまま日本時間として解釈する（UTC変換しない）
+function parseJST(s: string): Date {
+  const clean = s.slice(0, 16).replace(' ', 'T')
+  const [datePart, timePart] = clean.split('T')
+  const [y, m, d] = datePart.split('-').map(Number)
+  const [h, min] = (timePart ?? '00:00').split(':').map(Number)
+  return new Date(y, m - 1, d, h, min)
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient()
 
@@ -64,7 +74,7 @@ export default async function DashboardPage() {
                 <div>
                   <span className="font-medium text-gray-800">{lesson.title}</span>
                   <span className="text-gray-400 ml-2">
-                    {new Date(lesson.scheduled_at).toLocaleString('ja-JP', {
+                    {parseJST(lesson.scheduled_at).toLocaleString('ja-JP', {
                       month: 'numeric',
                       day: 'numeric',
                       weekday: 'short',
