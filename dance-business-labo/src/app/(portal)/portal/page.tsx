@@ -103,7 +103,7 @@ export default async function PortalPage() {
       <div className="relative overflow-hidden rounded-2xl mb-6 shadow-lg bg-gray-200 sm:hidden">
         {avatarSignedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[4/5] object-cover object-bottom" />
+          <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[4/5] object-contain bg-black" />
         ) : (
           <div className="w-full aspect-[4/5] bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-6xl">🕺</div>
         )}
@@ -129,7 +129,7 @@ export default async function PortalPage() {
 
       {/* PC: 雑誌の見開きのように、全身が見える写真とテキストを左右に配置 */}
       <div className="hidden sm:flex overflow-hidden rounded-2xl mb-6 shadow-lg bg-gray-900">
-        <div className="w-64 flex-shrink-0 bg-black flex items-center justify-center">
+        <div className="w-64 min-h-80 flex-shrink-0 bg-black flex items-center justify-center">
           {avatarSignedUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={avatarSignedUrl} alt={student.name} className="w-full h-full object-contain" />
