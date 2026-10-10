@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { CalendarDays, FileText, Home, LogOut, Theater } from 'lucide-react'
+import { CalendarDays, FileText, Home, LogOut, Theater, Video } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 const links = [
@@ -10,6 +10,7 @@ const links = [
   { href: '/portal/reserve', label: '予約・予定', icon: CalendarDays },
   { href: '/portal/records', label: 'カルテ', icon: FileText },
   { href: '/portal/stages', label: '舞台', icon: Theater },
+  { href: '/portal/videos', label: '動画', icon: Video },
 ]
 
 export default function StudentPortalNav({ placement }: { placement: 'header' | 'mobile' }) {
@@ -26,7 +27,7 @@ export default function StudentPortalNav({ placement }: { placement: 'header' | 
   if (placement === 'mobile') {
     return (
       <nav aria-label="生徒メニュー" className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-5">
+        <div className="mx-auto grid max-w-lg grid-cols-6">
           {links.map(({ href, label, icon: Icon }) => {
             const active = href === '/portal' ? pathname === href : pathname.startsWith(href)
             return (
