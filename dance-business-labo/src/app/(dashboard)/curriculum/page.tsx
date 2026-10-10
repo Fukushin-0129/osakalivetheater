@@ -289,6 +289,7 @@ export default function CurriculumPage() {
                             <span className="block text-sm font-medium text-gray-700 cursor-pointer select-none leading-snug"
                               onDoubleClick={() => { setEditingId(mid.id); setEditName(mid.name) }}
                               title="ダブルクリックで編集">{mid.name}</span>
+                            {mid.video_url && <VideoThumbnail url={mid.video_url} />}
                             <div className="flex items-center gap-0.5 mt-1">
                               {mid.video_url && <a href={mid.video_url} target="_blank" rel="noopener noreferrer"
                                 className="text-indigo-400 hover:text-indigo-600 p-0.5 rounded hover:bg-indigo-50"><ExternalLink size={10} /></a>}
