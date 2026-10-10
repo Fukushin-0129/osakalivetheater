@@ -5,6 +5,7 @@ import StudentKarteSection from '@/components/StudentKarteSection'
 import StudentQrCode from '@/components/StudentQrCode'
 import BackButton from '@/components/BackButton'
 import { Theater, MapPin } from 'lucide-react'
+import VideoThumb from '@/components/VideoThumb'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -156,6 +157,17 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     .filter(r => r.stage_performances)
     .sort((a, b) => (b.stage_performances!.performed_at).localeCompare(a.stage_performances!.performed_at))
 
+  const stagePerformanceIds = sortedStagePerformances.map(r => r.stage_performances!.id)
+  const { data: stageVideos } = stagePerformanceIds.length
+    ? await supabase.from('stage_performance_videos').select('performance_id, url, label').in('performance_id', stagePerformanceIds).order('display_order')
+    : { data: [] }
+  const stageVideoMap = new Map<string, { url: string; label: string | null }[]>()
+  for (const v of stageVideos ?? []) {
+    const list = stageVideoMap.get(v.performance_id) ?? []
+    list.push({ url: v.url, label: v.label })
+    stageVideoMap.set(v.performance_id, list)
+  }
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -259,6 +271,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
             <ul className="space-y-3">
               {sortedStagePerformances.map((r, i) => {
                 const p = r.stage_performances!
+                const videos = stageVideoMap.get(p.id) ?? []
                 return (
                   <li key={i}>
                     <Link href={`/stages`} className="block hover:bg-gray-50 -mx-2 px-2 py-1 rounded-lg transition-colors">
@@ -271,6 +284,13 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                         {r.role && <span className="text-gray-400">演目・役割: {r.role}</span>}
                       </div>
                     </Link>
+                    {videos.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto mt-2 pb-1 pl-1 scrollbar-none">
+                        {videos.map((v, vi) => (
+                          <VideoThumb key={vi} url={v.url} label={v.label} size="w-24" />
+                        ))}
+                      </div>
+                    )}
                   </li>
                 )
               })}
