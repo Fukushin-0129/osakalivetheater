@@ -119,6 +119,36 @@ export type StudentRecord = {
   students?: Student
 }
 
+export type StagePerformance = {
+  id: string
+  title: string
+  performed_at: string
+  venue: string | null
+  flyer_url: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type StagePerformanceParticipant = {
+  id: string
+  performance_id: string
+  student_id: string
+  role: string | null
+  created_at: string
+  students?: Student
+  stage_performances?: StagePerformance
+}
+
+export type StagePerformanceVideo = {
+  id: string
+  performance_id: string
+  url: string
+  label: string | null
+  display_order: number
+  created_at: string
+}
+
 export type CurriculumItem = {
   id: string
   parent_id: string | null
