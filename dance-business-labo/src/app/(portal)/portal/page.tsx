@@ -99,12 +99,13 @@ export default async function PortalPage() {
   return (
     <div>
       {/* あいさつ・プロフィール（雑誌風メインビジュアル） */}
-      <div className="relative overflow-hidden rounded-2xl mb-6 shadow-lg bg-gray-200">
+      {/* スマホ: 全面写真にテキストを重ねる */}
+      <div className="relative overflow-hidden rounded-2xl mb-6 shadow-lg bg-gray-200 sm:hidden">
         {avatarSignedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[4/5] sm:aspect-[16/9] object-cover object-bottom" />
+          <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[4/5] object-cover object-bottom" />
         ) : (
-          <div className="w-full aspect-[4/5] sm:aspect-[16/9] bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-6xl">🕺</div>
+          <div className="w-full aspect-[4/5] bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-6xl">🕺</div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
@@ -120,6 +121,35 @@ export default async function PortalPage() {
               <div>
                 <span className="text-lg font-bold">{daysSinceJoined}</span>
                 <span className="text-[11px] text-white/70 ml-1">日目</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* PC: 雑誌の見開きのように、全身が見える写真とテキストを左右に配置 */}
+      <div className="hidden sm:flex overflow-hidden rounded-2xl mb-6 shadow-lg bg-gray-900">
+        <div className="w-64 flex-shrink-0 bg-black flex items-center justify-center">
+          {avatarSignedUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarSignedUrl} alt={student.name} className="w-full h-full object-contain" />
+          ) : (
+            <div className="w-full aspect-[3/4] bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-6xl">🕺</div>
+          )}
+        </div>
+        <div className="flex-1 bg-gradient-to-br from-indigo-700 to-purple-700 text-white p-8 flex flex-col justify-center">
+          <p className="text-xs uppercase tracking-[0.3em] text-indigo-200 mb-2">Dance Labo Member</p>
+          <h1 className="text-4xl font-bold drop-shadow-sm">{student.name} さん</h1>
+          {student.name_kana && <p className="text-sm text-indigo-200 mt-1">{student.name_kana}</p>}
+          <div className="flex gap-8 mt-6 pt-6 border-t border-white/20">
+            <div>
+              <span className="text-3xl font-bold">{attendedCount}</span>
+              <span className="text-sm text-indigo-200 ml-1.5">回 通算レッスン</span>
+            </div>
+            {daysSinceJoined !== null && (
+              <div>
+                <span className="text-3xl font-bold">{daysSinceJoined}</span>
+                <span className="text-sm text-indigo-200 ml-1.5">日目</span>
               </div>
             )}
           </div>
