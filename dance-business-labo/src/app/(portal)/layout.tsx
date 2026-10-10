@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import StudentPortalNav from '@/components/layout/StudentPortalNav'
+import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
+import { Users } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +10,8 @@ export default async function PortalLayout({ children }: { children: React.React
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const { student, students } = await getAuthenticatedPortalStudent()
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -20,6 +24,26 @@ export default async function PortalLayout({ children }: { children: React.React
           <StudentPortalNav placement="header" />
         </div>
       </header>
+
+      {students.length > 1 && (
+        <div className="sticky top-14 z-20 bg-indigo-700/95 backdrop-blur text-white">
+          <div className="mx-auto flex max-w-4xl items-center gap-2 overflow-x-auto px-4 py-2 sm:px-6 scrollbar-none">
+            <Users size={14} className="flex-shrink-0 text-indigo-200" />
+            {students.map(s => (
+              <a
+                key={s.id}
+                href={`/api/portal/select-student?student_id=${s.id}`}
+                className={`flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  student?.id === s.id ? 'bg-white text-indigo-700' : 'bg-indigo-600/60 text-indigo-100 hover:bg-indigo-600'
+                }`}
+              >
+                {s.name}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto max-w-4xl px-4 py-5 pb-24 sm:px-6 sm:py-7 md:pb-8">
         {children}
       </main>

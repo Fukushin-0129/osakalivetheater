@@ -27,6 +27,13 @@ export type Student = {
   updated_at: string
 }
 
+export type PortalAccess = {
+  id: string
+  user_id: string
+  student_id: string
+  created_at: string
+}
+
 export type LessonType = {
   id: string
   name: string
