@@ -179,18 +179,20 @@ export default function StagesPage() {
     // 出演者を入れ替え
     await supabase.from('stage_performance_participants').delete().eq('performance_id', performanceId)
     if (participants.length > 0) {
-      await supabase.from('stage_performance_participants').insert(
+      const { error: participantsError } = await supabase.from('stage_performance_participants').insert(
         participants.map(p => ({ performance_id: performanceId, student_id: p.student_id, role: p.role.trim() || null }))
       )
+      if (participantsError) { setFormError(`出演者の保存に失敗しました: ${participantsError.message}`); setSaving(false); return }
     }
 
     // 動画リンクを入れ替え
     await supabase.from('stage_performance_videos').delete().eq('performance_id', performanceId)
     const validVideos = videos.filter(v => v.url.trim())
     if (validVideos.length > 0) {
-      await supabase.from('stage_performance_videos').insert(
+      const { error: videosError } = await supabase.from('stage_performance_videos').insert(
         validVideos.map((v, i) => ({ performance_id: performanceId, url: v.url.trim(), label: v.label.trim() || null, display_order: i }))
       )
+      if (videosError) { setFormError(`動画リンクの保存に失敗しました: ${videosError.message}`); setSaving(false); return }
     }
 
     setSaving(false)
