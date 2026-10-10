@@ -1,9 +1,5 @@
 import { Video, Play } from 'lucide-react'
-
-function getYouTubeId(url: string): string | null {
-  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/)
-  return m ? m[1] : null
-}
+import { getYouTubeId } from '@/lib/youtube'
 
 export default function VideoThumb({ url, label, size = 'w-28' }: { url: string; label?: string | null; size?: string }) {
   const ytId = getYouTubeId(url)

@@ -4,17 +4,9 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { CurriculumItem } from '@/types/database'
 import { Plus, Pencil, Trash2, Check, X, Loader2, GripVertical, BookOpen, Video, ExternalLink, Brain } from 'lucide-react'
+import { getYouTubeId } from '@/lib/youtube'
 
 type TreeItem = CurriculumItem & { children: TreeItem[] }
-
-function getYouTubeId(url: string): string | null {
-  try {
-    const u = new URL(url)
-    if (u.hostname.includes('youtube.com')) return u.searchParams.get('v')
-    if (u.hostname === 'youtu.be') return u.pathname.slice(1)
-  } catch {}
-  return null
-}
 
 function VideoThumbnail({ url }: { url: string }) {
   const ytId = getYouTubeId(url)
