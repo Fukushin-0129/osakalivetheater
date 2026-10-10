@@ -10,6 +10,7 @@ type VideoRow = { url: string; label: string }
 type PerformanceWithCounts = StagePerformance & {
   participant_count: number
   participant_names: string[]
+  video_count: number
 }
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent'
@@ -36,10 +37,11 @@ export default function StagesPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: perfs }, { data: participantRows }, { data: stu }] = await Promise.all([
+    const [{ data: perfs }, { data: participantRows }, { data: stu }, { data: videoRows }] = await Promise.all([
       supabase.from('stage_performances').select('*').order('performed_at', { ascending: false }),
       supabase.from('stage_performance_participants').select('performance_id, students(name)'),
       supabase.from('students').select('*').eq('is_active', true).order('name'),
+      supabase.from('stage_performance_videos').select('performance_id'),
     ])
     const countMap = new Map<string, string[]>()
     for (const row of participantRows ?? []) {
@@ -49,10 +51,15 @@ export default function StagesPage() {
       list.push(name)
       countMap.set(row.performance_id, list)
     }
+    const videoCountMap = new Map<string, number>()
+    for (const row of videoRows ?? []) {
+      videoCountMap.set(row.performance_id, (videoCountMap.get(row.performance_id) ?? 0) + 1)
+    }
     setPerformances((perfs ?? []).map(p => ({
       ...p,
       participant_count: countMap.get(p.id)?.length ?? 0,
       participant_names: countMap.get(p.id) ?? [],
+      video_count: videoCountMap.get(p.id) ?? 0,
     })))
     setStudents(stu ?? [])
     setLoading(false)
@@ -245,6 +252,11 @@ export default function StagesPage() {
                   <FlyerThumb path={p.flyer_url} title={p.title} />
                 ) : (
                   <Theater size={28} />
+                )}
+                {p.video_count > 0 && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 text-white text-[11px] px-2 py-0.5 rounded-full">
+                    <Video size={11} /> {p.video_count}
+                  </span>
                 )}
               </div>
               <div className="p-4 flex-1 flex flex-col">
