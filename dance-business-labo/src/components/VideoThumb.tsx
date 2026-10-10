@@ -1,6 +1,3 @@
-'use client'
-
-import { useState } from 'react'
 import { Video, Play } from 'lucide-react'
 
 function getYouTubeId(url: string): string | null {
@@ -9,27 +6,10 @@ function getYouTubeId(url: string): string | null {
 }
 
 export default function VideoThumb({ url, label, size = 'w-28' }: { url: string; label?: string | null; size?: string }) {
-  const [playing, setPlaying] = useState(false)
   const ytId = getYouTubeId(url)
 
-  if (playing && ytId) {
-    return (
-      <div className={`${size} flex-shrink-0`}>
-        <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black">
-          <iframe
-            src={`https://www.youtube.com/embed/${ytId}?autoplay=1`}
-            className="w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-        {label && <p className="text-[11px] text-gray-500 mt-1 truncate">{label}</p>}
-      </div>
-    )
-  }
-
   return (
-    <button onClick={() => setPlaying(true)} className={`${size} flex-shrink-0 group text-left`}>
+    <a href={url} target="_blank" rel="noopener noreferrer" className={`${size} flex-shrink-0 group block`}>
       <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-gray-100">
         {ytId ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -44,6 +24,6 @@ export default function VideoThumb({ url, label, size = 'w-28' }: { url: string;
         </div>
       </div>
       {label && <p className="text-[11px] text-gray-500 mt-1 truncate">{label}</p>}
-    </button>
+    </a>
   )
 }
