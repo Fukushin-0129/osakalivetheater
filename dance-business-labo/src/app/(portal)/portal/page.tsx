@@ -102,7 +102,7 @@ export default async function PortalPage() {
       <div className="relative overflow-hidden rounded-2xl mb-6 shadow-lg bg-gray-200">
         {avatarSignedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[4/5] sm:aspect-[16/9] object-cover" />
+          <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[4/5] sm:aspect-[16/9] object-cover object-bottom" />
         ) : (
           <div className="w-full aspect-[4/5] sm:aspect-[16/9] bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-6xl">🕺</div>
         )}
