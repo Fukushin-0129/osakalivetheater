@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation'
 import StudentPortalNav from '@/components/layout/StudentPortalNav'
 import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
 import { Users } from 'lucide-react'
+import { Shippori_Mincho } from 'next/font/google'
+
+const mincho = Shippori_Mincho({ weight: ['400', '600', '800'], subsets: ['latin'], variable: '--font-mincho' })
 
 export const dynamic = 'force-dynamic'
 
@@ -14,11 +17,18 @@ export default async function PortalLayout({ children }: { children: React.React
   const { student, students } = await getAuthenticatedPortalStudent()
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
+    <div className={`${mincho.variable} portal-root min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50`}>
+      <style>{`
+        .portal-root h1,
+        .portal-root h2 {
+          font-family: var(--font-mincho), serif;
+          letter-spacing: 0.03em;
+        }
+      `}</style>
       <header className="sticky top-0 z-30 bg-indigo-800 text-white shadow-md">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
           <div>
-            <div className="font-bold">🕺 Dance Labo</div>
+            <div className="font-bold" style={{ fontFamily: 'var(--font-mincho), serif' }}>🕺 Dance Labo</div>
             <div className="text-[11px] text-indigo-200">生徒ポータル</div>
           </div>
           <StudentPortalNav placement="header" />
