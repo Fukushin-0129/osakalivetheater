@@ -10,7 +10,7 @@ export async function getAuthenticatedPortalStudent() {
   const admin = createAdminClient()
   const { data: student, error } = await admin
     .from('students')
-    .select('id, name, name_kana, email')
+    .select('id, name, name_kana, email, avatar_url, joined_at')
     .eq('email', user.email)
     .maybeSingle()
 
