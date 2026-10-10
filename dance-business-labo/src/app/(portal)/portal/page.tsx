@@ -88,36 +88,41 @@ export default async function PortalPage() {
     return diff >= 0 && diff <= 30 && t.total_count - t.used_count > 0
   })
 
+  // プライベートバケットの署名付きURL（1時間有効）
+  let avatarSignedUrl: string | null = null
+  if (student.avatar_url) {
+    avatarSignedUrl = student.avatar_url.startsWith('http')
+      ? student.avatar_url
+      : (await admin!.storage.from('student-avatars').createSignedUrl(student.avatar_url, 3600)).data?.signedUrl ?? null
+  }
+
   return (
     <div>
-      {/* あいさつ・プロフィール */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-6 text-white mb-6 shadow-lg">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-white/15 ring-2 ring-white/40 flex items-center justify-center overflow-hidden flex-shrink-0">
-            {student.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={student.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-3xl">🕺</span>
+      {/* あいさつ・プロフィール（雑誌風メインビジュアル） */}
+      <div className="relative overflow-hidden rounded-2xl mb-6 shadow-lg bg-gray-200">
+        {avatarSignedUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarSignedUrl} alt={student.name} className="w-full aspect-[4/5] sm:aspect-[16/9] object-cover" />
+        ) : (
+          <div className="w-full aspect-[4/5] sm:aspect-[16/9] bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-6xl">🕺</div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-white/70 mb-1">Dance Labo Member</p>
+          <h1 className="text-2xl font-bold drop-shadow-sm truncate">{student.name} さん</h1>
+          {student.name_kana && <p className="text-xs text-white/70 mt-0.5">{student.name_kana}</p>}
+          <div className="flex gap-4 mt-3">
+            <div>
+              <span className="text-lg font-bold">{attendedCount}</span>
+              <span className="text-[11px] text-white/70 ml-1">回 通算レッスン</span>
+            </div>
+            {daysSinceJoined !== null && (
+              <div>
+                <span className="text-lg font-bold">{daysSinceJoined}</span>
+                <span className="text-[11px] text-white/70 ml-1">日目</span>
+              </div>
             )}
           </div>
-          <div className="min-w-0">
-            <p className="text-indigo-200 text-sm mb-0.5">こんにちは</p>
-            <h1 className="text-2xl font-bold truncate">{student.name} さん</h1>
-            {student.name_kana && <p className="text-indigo-200 text-xs mt-0.5">{student.name_kana}</p>}
-          </div>
-        </div>
-        <div className="flex mt-5 pt-4 border-t border-white/20">
-          <div className="flex-1 text-center">
-            <div className="text-xl font-bold">{attendedCount}<span className="text-xs font-normal text-indigo-200 ml-0.5">回</span></div>
-            <div className="text-[11px] text-indigo-200 mt-0.5">通算レッスン</div>
-          </div>
-          {daysSinceJoined !== null && (
-            <div className="flex-1 text-center border-l border-white/20">
-              <div className="text-xl font-bold">{daysSinceJoined}<span className="text-xs font-normal text-indigo-200 ml-0.5">日目</span></div>
-              <div className="text-[11px] text-indigo-200 mt-0.5">入会から</div>
-            </div>
-          )}
         </div>
       </div>
 
