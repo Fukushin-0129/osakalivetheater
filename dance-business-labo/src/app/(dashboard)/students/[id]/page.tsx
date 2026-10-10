@@ -4,6 +4,7 @@ import Link from 'next/link'
 import StudentKarteSection from '@/components/StudentKarteSection'
 import StudentQrCode from '@/components/StudentQrCode'
 import BackButton from '@/components/BackButton'
+import { Theater, MapPin } from 'lucide-react'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -118,11 +119,15 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     { data: attendance },
     { data: tickets },
     { data: records },
+    { data: stagePerformances },
   ] = await Promise.all([
     supabase.from('students').select('*').eq('id', id).single(),
     supabase.from('attendance').select('*, lessons(title, scheduled_at)').eq('student_id', id),
     supabase.from('student_tickets').select('*, ticket_types(name)').eq('student_id', id).order('purchased_at', { ascending: false }),
     supabase.from('student_records').select('*').eq('student_id', id).order('record_date', { ascending: false }),
+    supabase.from('stage_performance_participants')
+      .select('role, stage_performances(id, title, performed_at, venue)')
+      .eq('student_id', id),
   ])
 
   if (!student) notFound()
@@ -145,6 +150,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
   }
 
   const attendanceRecords = (attendance ?? []) as AttendanceRecord[]
+
+  type StagePerformanceRow = { role: string | null; stage_performances: { id: string; title: string; performed_at: string; venue: string | null } | null }
+  const sortedStagePerformances = ((stagePerformances ?? []) as unknown as StagePerformanceRow[])
+    .filter(r => r.stage_performances)
+    .sort((a, b) => (b.stage_performances!.performed_at).localeCompare(a.stage_performances!.performed_at))
 
   return (
     <div>
@@ -237,6 +247,33 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
                   <span className="font-bold text-indigo-600">{t.total_count - t.used_count}回残</span>
                 </li>
               ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <h2 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Theater size={16} className="text-indigo-500" /> 舞台出演履歴</h2>
+          {sortedStagePerformances.length === 0 ? (
+            <p className="text-gray-400 text-sm">出演記録がありません</p>
+          ) : (
+            <ul className="space-y-3">
+              {sortedStagePerformances.map((r, i) => {
+                const p = r.stage_performances!
+                return (
+                  <li key={i}>
+                    <Link href={`/stages`} className="block hover:bg-gray-50 -mx-2 px-2 py-1 rounded-lg transition-colors">
+                      <div className="text-xs text-indigo-500 font-medium">
+                        {new Date(p.performed_at + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </div>
+                      <div className="text-sm font-medium text-gray-800">{p.title}</div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                        {p.venue && <span className="flex items-center gap-1"><MapPin size={11} /> {p.venue}</span>}
+                        {r.role && <span className="text-gray-400">演目・役割: {r.role}</span>}
+                      </div>
+                    </Link>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
