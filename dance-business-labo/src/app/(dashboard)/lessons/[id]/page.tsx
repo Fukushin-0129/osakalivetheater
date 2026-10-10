@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType, CurriculumItem, LessonPlanItem, LessonEvaluation, Student, LessonVideo } from '@/types/database'
 import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X, GripVertical, Video } from 'lucide-react'
 import Link from 'next/link'
+import { getYouTubeId } from '@/lib/youtube'
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 const MAX_LESSON_VIDEOS = 3
@@ -14,15 +15,6 @@ function parseJST(s: string): Date {
   const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
   const [h, min] = clean.slice(11).split(':').map(Number)
   return new Date(y, m - 1, d, h, min)
-}
-
-function getYouTubeId(url: string): string | null {
-  try {
-    const u = new URL(url)
-    if (u.hostname.includes('youtube.com')) return u.searchParams.get('v')
-    if (u.hostname === 'youtu.be') return u.pathname.slice(1)
-  } catch {}
-  return null
 }
 
 type AttendingStudent = { student_id: string; students: Student | null; notes: string | null }

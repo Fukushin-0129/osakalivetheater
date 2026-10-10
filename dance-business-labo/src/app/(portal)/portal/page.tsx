@@ -1,11 +1,7 @@
 import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
 import Link from 'next/link'
 import { Ticket, FileText, Calendar, AlertTriangle, Clock, Video, Play } from 'lucide-react'
-
-function getYouTubeId(url: string): string | null {
-  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/)
-  return m ? m[1] : null
-}
+import { getYouTubeId } from '@/lib/youtube'
 
 // DBに保存されたタイムスタンプはタイムゾーンなし文字列として扱い、
 // そのまま日本時間として解釈する（UTC変換しない）

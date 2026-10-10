@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType } from '@/types/database'
 import { Plus, Pencil, Trash2, Calendar, List, ChevronLeft, ChevronRight, Clock, MapPin, Users, X, Loader2, Download, BookOpen, ArrowLeftRight } from 'lucide-react'
 import Link from 'next/link'
+import { getYouTubeId } from '@/lib/youtube'
 
 type ViewMode = 'list' | 'calendar'
 type AttendanceWithStudent = { count: number; students: { name: string; name_kana: string | null } | null; status: string }
@@ -26,11 +27,6 @@ function parseJST(s: string): Date {
   const [y, m, d] = clean.slice(0, 10).split('-').map(Number)
   const [h, min] = clean.slice(11).split(':').map(Number)
   return new Date(y, m - 1, d, h, min)
-}
-
-function getYouTubeId(url: string): string | null {
-  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/)
-  return m ? m[1] : null
 }
 
 function todayStr() {
