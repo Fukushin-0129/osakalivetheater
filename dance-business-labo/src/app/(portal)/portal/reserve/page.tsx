@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CalendarDays, CheckCircle, Clock, Loader2, MapPin, Users } from 'lucide-react'
 
+// APIから返るタイムスタンプは常にJSTの日時として扱う（UTC変換しない）
+function parseJST(s: string): Date {
+  const clean = s.slice(0, 16).replace(' ', 'T').replace('Z', '')
+  const [datePart, timePart] = clean.split('T')
+  const [y, m, d] = datePart.split('-').map(Number)
+  const [h, min] = (timePart ?? '00:00').split(':').map(Number)
+  return new Date(y, m - 1, d, h, min)
+}
+
 interface Lesson {
   id: string
   title: string
@@ -90,7 +99,7 @@ export default function PortalReservePage() {
       ) : (
         <div className="space-y-3">
           {lessons.map((lesson) => {
-            const date = new Date(lesson.scheduled_at)
+            const date = parseJST(lesson.scheduled_at)
             const full = lesson.enrolled_count >= lesson.max_capacity
             const isBusy = busyLesson === lesson.id
 

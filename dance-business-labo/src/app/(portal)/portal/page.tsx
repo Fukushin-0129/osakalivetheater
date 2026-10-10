@@ -7,6 +7,16 @@ function getYouTubeId(url: string): string | null {
   return m ? m[1] : null
 }
 
+// DBに保存されたタイムスタンプはタイムゾーンなし文字列として扱い、
+// そのまま日本時間として解釈する（UTC変換しない）
+function parseJST(s: string): Date {
+  const clean = s.slice(0, 16).replace(' ', 'T')
+  const [datePart, timePart] = clean.split('T')
+  const [y, m, d] = datePart.split('-').map(Number)
+  const [h, min] = (timePart ?? '00:00').split(':').map(Number)
+  return new Date(y, m - 1, d, h, min)
+}
+
 const TICKET_GRADIENTS = [
   'from-indigo-500 to-purple-500',
   'from-pink-500 to-rose-500',
@@ -194,7 +204,7 @@ export default async function PortalPage() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-1.5 truncate">
-                    {v.label ?? new Date(v.scheduledAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                    {v.label ?? parseJST(v.scheduledAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
                   </p>
                 </a>
               )
@@ -251,7 +261,7 @@ export default async function PortalPage() {
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
             {upcomingLessons.map(l => {
-              const d = new Date(l.scheduled_at)
+              const d = parseJST(l.scheduled_at)
               return (
                 <div key={l.id} className="flex-shrink-0 w-28 bg-indigo-50 rounded-xl p-3 text-center">
                   <div className="text-[10px] text-indigo-400 font-medium">{d.toLocaleDateString('ja-JP', { weekday: 'short' })}曜</div>
