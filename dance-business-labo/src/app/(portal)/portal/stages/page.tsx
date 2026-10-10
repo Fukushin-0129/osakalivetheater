@@ -1,10 +1,6 @@
 import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
-import { Theater, MapPin, Video } from 'lucide-react'
-
-function getYouTubeId(url: string): string | null {
-  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/)
-  return m ? m[1] : null
-}
+import { Theater, MapPin } from 'lucide-react'
+import VideoThumb from '@/components/VideoThumb'
 
 export default async function PortalStagesPage() {
   const { student, admin } = await getAuthenticatedPortalStudent()
@@ -83,22 +79,9 @@ export default async function PortalStagesPage() {
 
                   {videos.length > 0 && (
                     <div className="flex gap-3 overflow-x-auto mt-3 pb-1 scrollbar-none">
-                      {videos.map((v, vi) => {
-                        const ytId = getYouTubeId(v.url)
-                        return (
-                          <a key={vi} href={v.url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-28 group">
-                            <div className="relative w-28 aspect-video rounded-lg overflow-hidden bg-gray-100">
-                              {ytId ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center text-gray-300"><Video size={16} /></div>
-                              )}
-                            </div>
-                            {v.label && <p className="text-[11px] text-gray-500 mt-1 truncate">{v.label}</p>}
-                          </a>
-                        )
-                      })}
+                      {videos.map((v, vi) => (
+                        <VideoThumb key={vi} url={v.url} label={v.label} />
+                      ))}
                     </div>
                   )}
                 </div>
