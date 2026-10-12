@@ -9,7 +9,8 @@ import { getYouTubeId } from '@/lib/youtube'
 
 type ViewMode = 'list' | 'calendar'
 type AttendanceWithStudent = { count: number; students: { name: string; name_kana: string | null } | null; status: string }
-type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[]; lesson_videos?: { url: string }[] }
+type ReservationWithStudent = { students: { name: string; name_kana: string | null } | null }
+type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[]; lesson_videos?: { url: string }[]; student_reservations?: ReservationWithStudent[] }
 type AttendeeInfo = { id: string; student_id: string; status: string; students: { name: string; name_kana: string | null } | null }
 type AttendeeModal = { lessonId: string; lessonTitle: string; lessonDate: string } | null
 type SubRecord = { id: string; original_lesson_id: string; substitute_lesson_id: string | null; reason: string | null; price_difference: number; notes: string | null }
@@ -91,7 +92,7 @@ export default function LessonsPage() {
     const start = `${year}-01-01T00:00:00`
     const end = `${year + 1}-01-01T00:00:00`
     const [{ data: l }, { data: lt }] = await Promise.all([
-      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana)), lesson_videos(url)').gte('scheduled_at', start).lt('scheduled_at', end).order('scheduled_at', { ascending: true }),
+      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana)), lesson_videos(url), student_reservations(students(name, name_kana))').gte('scheduled_at', start).lt('scheduled_at', end).order('scheduled_at', { ascending: true }),
       supabase.from('lesson_types').select('*').order('name'),
     ])
     setLessons((l ?? []) as LessonWithCount[])
@@ -499,6 +500,16 @@ export default function LessonsPage() {
                                   <span key={i} className="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">{a.students?.name ?? '—'}</span>
                                 ))}
                               </div>
+                              {(l.student_reservations?.length ?? 0) > 0 && (
+                                <div className="mt-1.5">
+                                  <div className="flex items-center gap-1 text-[11px] text-indigo-500 mb-0.5">予約 {l.student_reservations!.length}名</div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {l.student_reservations!.map((r, i) => (
+                                      <span key={i} className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded">{r.students?.name ?? '—'}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right whitespace-nowrap">
                               {(() => {
