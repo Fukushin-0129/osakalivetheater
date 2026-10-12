@@ -58,23 +58,28 @@ export default async function PortalPage() {
   ])
 
   const reservationLessonIds = (reservations ?? []).map((reservation) => reservation.lesson_id)
-  const { data: upcomingLessons } = reservationLessonIds.length
-    ? await admin!.from('lessons')
-        .select('id, title, scheduled_at, location')
-        .in('id', reservationLessonIds)
-        .gte('scheduled_at', new Date().toISOString())
-        .order('scheduled_at')
-        .limit(5)
-    : { data: [] }
-
   const attendedLessonIds = [...new Set((attendedRows ?? []).map(r => r.lesson_id))]
-  const { data: attendedLessons } = attendedLessonIds.length
-    ? await admin!.from('lessons')
-        .select('id, scheduled_at, lesson_videos(id, url, label)')
-        .in('id', attendedLessonIds)
-        .order('scheduled_at', { ascending: false })
-        .limit(8)
-    : { data: [] }
+
+  const [{ data: upcomingLessons }, { data: attendedLessons }, avatarSignedUrlResult] = await Promise.all([
+    reservationLessonIds.length
+      ? admin!.from('lessons')
+          .select('id, title, scheduled_at, location')
+          .in('id', reservationLessonIds)
+          .gte('scheduled_at', new Date().toISOString())
+          .order('scheduled_at')
+          .limit(5)
+      : Promise.resolve({ data: [] }),
+    attendedLessonIds.length
+      ? admin!.from('lessons')
+          .select('id, scheduled_at, lesson_videos(id, url, label)')
+          .in('id', attendedLessonIds)
+          .order('scheduled_at', { ascending: false })
+          .limit(8)
+      : Promise.resolve({ data: [] }),
+    student.avatar_url && !student.avatar_url.startsWith('http')
+      ? admin!.storage.from('student-avatars').createSignedUrl(student.avatar_url, 3600)
+      : Promise.resolve(null),
+  ])
 
   type VideoWithLesson = { id: string; url: string; label: string | null; scheduledAt: string }
   const recentVideos: VideoWithLesson[] = (attendedLessons ?? [])
@@ -96,12 +101,9 @@ export default async function PortalPage() {
   })
 
   // プライベートバケットの署名付きURL（1時間有効）
-  let avatarSignedUrl: string | null = null
-  if (student.avatar_url) {
-    avatarSignedUrl = student.avatar_url.startsWith('http')
-      ? student.avatar_url
-      : (await admin!.storage.from('student-avatars').createSignedUrl(student.avatar_url, 3600)).data?.signedUrl ?? null
-  }
+  const avatarSignedUrl: string | null = student.avatar_url?.startsWith('http')
+    ? student.avatar_url
+    : avatarSignedUrlResult?.data?.signedUrl ?? null
 
   return (
     <div>

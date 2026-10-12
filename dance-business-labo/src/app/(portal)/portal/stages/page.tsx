@@ -32,15 +32,14 @@ export default async function PortalStagesPage() {
   }
 
   const flyerUrls = new Map<string, string>()
-  for (const r of performances) {
+  await Promise.all(performances.map(async r => {
     const p = r.stage_performances!
-    if (p.flyer_url) {
-      const url = p.flyer_url.startsWith('http')
-        ? p.flyer_url
-        : (await admin!.storage.from('stage-flyers').createSignedUrl(p.flyer_url, 3600)).data?.signedUrl
-      if (url) flyerUrls.set(p.id, url)
-    }
-  }
+    if (!p.flyer_url) return
+    const url = p.flyer_url.startsWith('http')
+      ? p.flyer_url
+      : (await admin!.storage.from('stage-flyers').createSignedUrl(p.flyer_url, 3600)).data?.signedUrl
+    if (url) flyerUrls.set(p.id, url)
+  }))
 
   return (
     <div>
