@@ -176,39 +176,36 @@ export default async function PortalPage() {
         </div>
       )}
 
-      {/* レッスンの様子（動画） */}
-      {recentVideos.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
-          <h2 className="font-semibold text-gray-700 flex items-center gap-2 mb-3">
-            <Video size={16} className="text-indigo-500" /> レッスンの様子
-          </h2>
+      {/* 予約済みのレッスン */}
+      <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-700 flex items-center gap-2"><Calendar size={16} className="text-indigo-500" /> 予約済みのレッスン</h2>
+          <Link href="/portal/reserve" className="text-xs text-indigo-600 hover:underline">一覧を見る →</Link>
+        </div>
+        {!upcomingLessons || upcomingLessons.length === 0 ? (
+          <p className="text-gray-400 text-sm">予定されているレッスンはありません</p>
+        ) : (
           <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-            {recentVideos.map(v => {
-              const ytId = getYouTubeId(v.url)
+            {upcomingLessons.map(l => {
+              const d = parseJST(l.scheduled_at)
               return (
-                <a key={v.id} href={v.url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-36 group">
-                  <div className="relative w-36 aspect-video rounded-lg overflow-hidden bg-gray-100">
-                    {ytId ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300"><Video size={20} /></div>
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
-                      <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
-                        <Play size={14} className="text-indigo-600 ml-0.5" fill="currentColor" />
-                      </div>
-                    </div>
+                <div key={l.id} className="flex-shrink-0 w-28 bg-indigo-50 rounded-xl p-3 text-center">
+                  <div className="text-[10px] text-indigo-400 font-medium">{d.toLocaleDateString('ja-JP', { weekday: 'short' })}曜</div>
+                  <div className="text-xl font-bold text-indigo-700 leading-tight">{d.getDate()}</div>
+                  <div className="text-[10px] text-gray-400">{d.getMonth() + 1}月</div>
+                  <div className="text-xs font-medium text-gray-700 mt-1.5">
+                    {d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1.5 truncate">
-                    {v.label ?? parseJST(v.scheduledAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
-                  </p>
-                </a>
+                  <div className="text-[10px] text-gray-400 truncate mt-0.5" title={l.title}>{l.title}</div>
+                </div>
               )
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      {/* レッスン予約（その場で予約できる） */}
+      <ReserveWidget />
 
       {/* チケット残数 */}
       <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
@@ -247,36 +244,39 @@ export default async function PortalPage() {
         )}
       </div>
 
-      {/* レッスン予約（その場で予約できる） */}
-      <ReserveWidget />
-
-      {/* 直近のレッスン */}
-      <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-gray-700 flex items-center gap-2"><Calendar size={16} className="text-indigo-500" /> 予約済みのレッスン</h2>
-          <Link href="/portal/reserve" className="text-xs text-indigo-600 hover:underline">一覧を見る →</Link>
-        </div>
-        {!upcomingLessons || upcomingLessons.length === 0 ? (
-          <p className="text-gray-400 text-sm">予定されているレッスンはありません</p>
-        ) : (
+      {/* レッスンの様子（動画） */}
+      {recentVideos.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
+          <h2 className="font-semibold text-gray-700 flex items-center gap-2 mb-3">
+            <Video size={16} className="text-indigo-500" /> レッスンの様子
+          </h2>
           <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-            {upcomingLessons.map(l => {
-              const d = parseJST(l.scheduled_at)
+            {recentVideos.map(v => {
+              const ytId = getYouTubeId(v.url)
               return (
-                <div key={l.id} className="flex-shrink-0 w-28 bg-indigo-50 rounded-xl p-3 text-center">
-                  <div className="text-[10px] text-indigo-400 font-medium">{d.toLocaleDateString('ja-JP', { weekday: 'short' })}曜</div>
-                  <div className="text-xl font-bold text-indigo-700 leading-tight">{d.getDate()}</div>
-                  <div className="text-[10px] text-gray-400">{d.getMonth() + 1}月</div>
-                  <div className="text-xs font-medium text-gray-700 mt-1.5">
-                    {d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                <a key={v.id} href={v.url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0 w-36 group">
+                  <div className="relative w-36 aspect-video rounded-lg overflow-hidden bg-gray-100">
+                    {ytId ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-300"><Video size={20} /></div>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+                      <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
+                        <Play size={14} className="text-indigo-600 ml-0.5" fill="currentColor" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-gray-400 truncate mt-0.5" title={l.title}>{l.title}</div>
-                </div>
+                  <p className="text-xs text-gray-500 mt-1.5 truncate">
+                    {v.label ?? parseJST(v.scheduledAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                  </p>
+                </a>
               )
             })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 最近のカルテ */}
       <div className="bg-white rounded-xl shadow-sm p-5">
