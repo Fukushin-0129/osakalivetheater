@@ -2,6 +2,7 @@ import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
 import Link from 'next/link'
 import { Ticket, FileText, Calendar, AlertTriangle, Clock, Video, Play } from 'lucide-react'
 import { getYouTubeId } from '@/lib/youtube'
+import ReserveWidget from '@/components/portal/ReserveWidget'
 
 // DBに保存されたタイムスタンプはタイムゾーンなし文字列として扱い、
 // そのまま日本時間として解釈する（UTC変換しない）
@@ -246,10 +247,13 @@ export default async function PortalPage() {
         )}
       </div>
 
+      {/* レッスン予約（その場で予約できる） */}
+      <ReserveWidget />
+
       {/* 直近のレッスン */}
       <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-gray-700 flex items-center gap-2"><Calendar size={16} className="text-indigo-500" /> 直近のレッスン</h2>
+          <h2 className="font-semibold text-gray-700 flex items-center gap-2"><Calendar size={16} className="text-indigo-500" /> 予約済みのレッスン</h2>
           <Link href="/portal/reserve" className="text-xs text-indigo-600 hover:underline">一覧を見る →</Link>
         </div>
         {!upcomingLessons || upcomingLessons.length === 0 ? (
