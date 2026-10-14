@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthenticatedPortalStudent } from '@/lib/portal/auth'
+import { sendNotificationEmail } from '@/lib/email'
+
+// APIから返るタイムスタンプは常にJSTの日時として扱う（UTC変換しない）
+function formatJST(s: string): string {
+  const clean = s.slice(0, 16).replace(' ', 'T')
+  const [datePart, timePart] = clean.split('T')
+  const [y, m, d] = datePart.split('-').map(Number)
+  const [h, min] = (timePart ?? '00:00').split(':').map(Number)
+  const date = new Date(y, m - 1, d, h, min)
+  return date.toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })
+}
 
 export async function GET() {
   const { student, admin } = await getAuthenticatedPortalStudent()
@@ -89,6 +100,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '予約に失敗しました' }, { status: 500 })
   }
 
+  const { data: lesson } = await admin.from('lessons').select('title, scheduled_at').eq('id', lessonId).maybeSingle()
+  if (lesson) {
+    void sendNotificationEmail(
+      `【予約】${student.name}さんがレッスンを予約しました`,
+      `${student.name}さんが以下のレッスンを予約しました。\n\nレッスン: ${lesson.title}\n日時: ${formatJST(lesson.scheduled_at)}`
+    )
+  }
+
   return NextResponse.json({ reservation: data }, { status: 201 })
 }
 
@@ -114,6 +133,14 @@ export async function DELETE(request: NextRequest) {
     }
     console.error('Failed to cancel lesson reservation:', error)
     return NextResponse.json({ error: '予約のキャンセルに失敗しました' }, { status: 500 })
+  }
+
+  const { data: lesson } = await admin.from('lessons').select('title, scheduled_at').eq('id', lessonId).maybeSingle()
+  if (lesson) {
+    void sendNotificationEmail(
+      `【キャンセル】${student.name}さんがレッスン予約をキャンセルしました`,
+      `${student.name}さんが以下のレッスンの予約をキャンセルしました。\n\nレッスン: ${lesson.title}\n日時: ${formatJST(lesson.scheduled_at)}`
+    )
   }
 
   return NextResponse.json({ success: true })
