@@ -127,6 +127,9 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'lesson_id is invalid' }, { status: 400 })
   }
 
+  const body = await request.json().catch(() => null)
+  const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : ''
+
   const { error } = await admin.rpc('cancel_student_lesson_reservation', {
     p_student_id: student.id,
     p_lesson_id: lessonId,
@@ -144,7 +147,7 @@ export async function DELETE(request: NextRequest) {
   if (lesson) {
     void sendNotificationEmail(
       `【キャンセル】${student.name}さんがレッスン予約をキャンセルしました`,
-      `${student.name}さんが以下のレッスンの予約をキャンセルしました。\n\nレッスン: ${lesson.title}\n日時: ${formatJST(lesson.scheduled_at)}`
+      `${student.name}さんが以下のレッスンの予約をキャンセルしました。\n\nレッスン: ${lesson.title}\n日時: ${formatJST(lesson.scheduled_at)}${note ? `\n事情・ご要望: ${note}` : ''}`
     )
   }
 
