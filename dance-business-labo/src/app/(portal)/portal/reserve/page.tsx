@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarDays, CheckCircle, Clock, Loader2, MapPin, Users } from 'lucide-react'
+import { CalendarDays, CheckCircle, Clock, Loader2, MapPin, Users, MessageCircleWarning } from 'lucide-react'
 
 // APIから返るタイムスタンプは常にJSTの日時として扱う（UTC変換しない）
 function parseJST(s: string): Date {
@@ -47,7 +47,12 @@ export default function PortalReservePage() {
   useEffect(() => { void loadLessons() }, [loadLessons])
 
   async function updateReservation(lesson: Lesson) {
-    if (lesson.is_reserved && !window.confirm('このレッスンの予約をキャンセルしますか？')) return
+    let note = ''
+    if (lesson.is_reserved) {
+      if (!window.confirm('このレッスンの予約をキャンセルしますか？')) return
+    } else {
+      note = window.prompt('事情・ご要望があればご記入ください（任意・空欄でOK）') ?? ''
+    }
 
     setBusyLesson(lesson.id)
     setError('')
@@ -62,7 +67,7 @@ export default function PortalReservePage() {
           : {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lesson_id: lesson.id }),
+              body: JSON.stringify({ lesson_id: lesson.id, note }),
             }
       )
       const result = await response.json()
@@ -71,6 +76,31 @@ export default function PortalReservePage() {
       await loadLessons()
     } catch (err) {
       setError(err instanceof Error ? err.message : '予約を更新できませんでした')
+    } finally {
+      setBusyLesson(null)
+    }
+  }
+
+  async function reportAbsence(lesson: Lesson) {
+    const reason = window.prompt('欠席の事情をご記入ください（任意）')
+    if (reason === null) return
+    if (!window.confirm('この内容で欠席連絡を送りますか？\n予約している場合は予約も取り消されます。')) return
+
+    setBusyLesson(lesson.id)
+    setError('')
+    setMessage('')
+    try {
+      const response = await fetch('/api/portal/absence-notices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lesson_id: lesson.id, reason }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || '欠席連絡を送れませんでした')
+      setMessage('欠席連絡を送りました')
+      await loadLessons()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '欠席連絡を送れませんでした')
     } finally {
       setBusyLesson(null)
     }
@@ -120,14 +150,24 @@ export default function PortalReservePage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => void updateReservation(lesson)}
-                  disabled={isBusy || (!lesson.is_reserved && full)}
-                  className={`col-span-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-1 sm:w-auto ${lesson.is_reserved ? 'bg-indigo-50 text-indigo-700 hover:bg-red-50 hover:text-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                >
-                  {isBusy ? <Loader2 size={16} className="animate-spin" /> : lesson.is_reserved ? <><CheckCircle size={16} />予約済み・キャンセル</> : full ? '満席' : '予約する'}
-                </button>
+                <div className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:items-end">
+                  <button
+                    type="button"
+                    onClick={() => void updateReservation(lesson)}
+                    disabled={isBusy || (!lesson.is_reserved && full)}
+                    className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto ${lesson.is_reserved ? 'bg-indigo-50 text-indigo-700 hover:bg-red-50 hover:text-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                  >
+                    {isBusy ? <Loader2 size={16} className="animate-spin" /> : lesson.is_reserved ? <><CheckCircle size={16} />予約済み・キャンセル</> : full ? '満席' : '予約する'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void reportAbsence(lesson)}
+                    disabled={isBusy}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <MessageCircleWarning size={13} />欠席連絡
+                  </button>
+                </div>
               </article>
             )
           })}

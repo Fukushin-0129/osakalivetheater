@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null)
   const lessonId = body?.lesson_id
+  const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : ''
   if (typeof lessonId !== 'string' || !lessonId) {
     return NextResponse.json({ error: 'lesson_id is required' }, { status: 400 })
   }
@@ -100,11 +101,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '予約に失敗しました' }, { status: 500 })
   }
 
+  if (note) {
+    await admin.from('student_reservations').update({ note }).eq('student_id', student.id).eq('lesson_id', lessonId)
+  }
+
   const { data: lesson } = await admin.from('lessons').select('title, scheduled_at').eq('id', lessonId).maybeSingle()
   if (lesson) {
     void sendNotificationEmail(
       `【予約】${student.name}さんがレッスンを予約しました`,
-      `${student.name}さんが以下のレッスンを予約しました。\n\nレッスン: ${lesson.title}\n日時: ${formatJST(lesson.scheduled_at)}`
+      `${student.name}さんが以下のレッスンを予約しました。\n\nレッスン: ${lesson.title}\n日時: ${formatJST(lesson.scheduled_at)}${note ? `\n事情・ご要望: ${note}` : ''}`
     )
   }
 

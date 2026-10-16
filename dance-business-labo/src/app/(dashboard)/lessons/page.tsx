@@ -9,8 +9,9 @@ import { getYouTubeId } from '@/lib/youtube'
 
 type ViewMode = 'list' | 'calendar'
 type AttendanceWithStudent = { count: number; students: { name: string; name_kana: string | null } | null; status: string }
-type ReservationWithStudent = { students: { name: string; name_kana: string | null } | null }
-type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[]; lesson_videos?: { url: string }[]; student_reservations?: ReservationWithStudent[] }
+type ReservationWithStudent = { note: string | null; students: { name: string; name_kana: string | null } | null }
+type AbsenceNoticeWithStudent = { reason: string | null; status: string; students: { name: string; name_kana: string | null } | null }
+type LessonWithCount = Lesson & { lesson_types: LessonType | null; attendance: AttendanceWithStudent[]; lesson_videos?: { url: string }[]; student_reservations?: ReservationWithStudent[]; lesson_absence_notices?: AbsenceNoticeWithStudent[] }
 type AttendeeInfo = { id: string; student_id: string; status: string; students: { name: string; name_kana: string | null } | null }
 type AttendeeModal = { lessonId: string; lessonTitle: string; lessonDate: string } | null
 type SubRecord = { id: string; original_lesson_id: string; substitute_lesson_id: string | null; reason: string | null; price_difference: number; notes: string | null }
@@ -92,7 +93,7 @@ export default function LessonsPage() {
     const start = `${year}-01-01T00:00:00`
     const end = `${year + 1}-01-01T00:00:00`
     const [{ data: l }, { data: lt }] = await Promise.all([
-      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana)), lesson_videos(url), student_reservations(students(name, name_kana))').gte('scheduled_at', start).lt('scheduled_at', end).order('scheduled_at', { ascending: true }),
+      supabase.from('lessons').select('*, lesson_types(*), attendance(status, students(name, name_kana)), lesson_videos(url), student_reservations(note, students(name, name_kana)), lesson_absence_notices(reason, status, students(name, name_kana))').gte('scheduled_at', start).lt('scheduled_at', end).order('scheduled_at', { ascending: true }),
       supabase.from('lesson_types').select('*').order('name'),
     ])
     setLessons((l ?? []) as LessonWithCount[])
@@ -505,7 +506,21 @@ export default function LessonsPage() {
                                   <div className="flex items-center gap-1 text-[11px] text-indigo-500 mb-0.5">予約 {l.student_reservations!.length}名</div>
                                   <div className="flex flex-wrap gap-1">
                                     {l.student_reservations!.map((r, i) => (
-                                      <span key={i} className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded">{r.students?.name ?? '—'}</span>
+                                      <span key={i} className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded" title={r.note ?? undefined}>
+                                        {r.students?.name ?? '—'}{r.note ? ' 📝' : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {(l.lesson_absence_notices?.length ?? 0) > 0 && (
+                                <div className="mt-1.5">
+                                  <div className="flex items-center gap-1 text-[11px] text-orange-500 mb-0.5">欠席連絡 {l.lesson_absence_notices!.length}件</div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {l.lesson_absence_notices!.map((n, i) => (
+                                      <span key={i} className={`inline-block px-1.5 py-0.5 text-xs rounded ${n.status === 'acknowledged' ? 'bg-gray-100 text-gray-400' : 'bg-orange-50 text-orange-600'}`} title={n.reason ?? undefined}>
+                                        {n.students?.name ?? '—'}{n.status === 'acknowledged' ? ' 済' : ''}
+                                      </span>
                                     ))}
                                   </div>
                                 </div>
