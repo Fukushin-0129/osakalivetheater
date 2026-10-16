@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CalendarDays, CheckCircle, Clock, Loader2, MapPin } from 'lucide-react'
+import { CalendarDays, CheckCircle, Clock, Loader2, MapPin, X } from 'lucide-react'
 
 interface Lesson {
   id: string
@@ -14,6 +14,8 @@ interface Lesson {
   is_reserved: boolean
   lesson_types: { name: string; duration_minutes: number } | null
 }
+
+type DialogState = { type: 'reserve'; lesson: Lesson; note: string } | { type: 'cancel'; lesson: Lesson } | null
 
 // APIから返るタイムスタンプは常にJSTの日時として扱う（UTC変換しない）
 function parseJST(s: string): Date {
@@ -31,6 +33,8 @@ export default function ReserveWidget() {
   const [loading, setLoading] = useState(true)
   const [busyLesson, setBusyLesson] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [dialog, setDialog] = useState<DialogState>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const loadLessons = useCallback(async () => {
     try {
@@ -47,24 +51,42 @@ export default function ReserveWidget() {
 
   useEffect(() => { void loadLessons() }, [loadLessons])
 
-  async function updateReservation(lesson: Lesson) {
-    if (lesson.is_reserved && !window.confirm('このレッスンの予約をキャンセルしますか？')) return
-
+  async function submitReserve(lesson: Lesson, note: string) {
+    setSubmitting(true)
     setBusyLesson(lesson.id)
     setError('')
     try {
-      const response = await fetch(
-        lesson.is_reserved ? `/api/portal/lessons?lesson_id=${encodeURIComponent(lesson.id)}` : '/api/portal/lessons',
-        lesson.is_reserved
-          ? { method: 'DELETE' }
-          : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lesson_id: lesson.id }) }
-      )
+      const response = await fetch('/api/portal/lessons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lesson_id: lesson.id, note }),
+      })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || '予約を更新できませんでした')
+      setDialog(null)
       await loadLessons()
     } catch (err) {
       setError(err instanceof Error ? err.message : '予約を更新できませんでした')
     } finally {
+      setSubmitting(false)
+      setBusyLesson(null)
+    }
+  }
+
+  async function submitCancel(lesson: Lesson) {
+    setSubmitting(true)
+    setBusyLesson(lesson.id)
+    setError('')
+    try {
+      const response = await fetch(`/api/portal/lessons?lesson_id=${encodeURIComponent(lesson.id)}`, { method: 'DELETE' })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || '予約を更新できませんでした')
+      setDialog(null)
+      await loadLessons()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '予約を更新できませんでした')
+    } finally {
+      setSubmitting(false)
       setBusyLesson(null)
     }
   }
@@ -103,7 +125,7 @@ export default function ReserveWidget() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => void updateReservation(lesson)}
+                  onClick={() => setDialog(lesson.is_reserved ? { type: 'cancel', lesson } : { type: 'reserve', lesson, note: '' })}
                   disabled={isBusy || (!lesson.is_reserved && full)}
                   className={`flex-shrink-0 flex min-h-8 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${lesson.is_reserved ? 'bg-indigo-100 text-indigo-700 hover:bg-red-50 hover:text-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                 >
@@ -112,6 +134,51 @@ export default function ReserveWidget() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {dialog && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+          <div className="flex w-full max-h-[90vh] flex-col rounded-t-2xl bg-white sm:max-w-md sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <h2 className="text-lg font-bold text-gray-800">{dialog.type === 'reserve' ? 'レッスンを予約' : '予約をキャンセル'}</h2>
+              <button onClick={() => setDialog(null)} className="p-1 text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+              <p className="text-sm text-gray-600">{dialog.lesson.title}</p>
+
+              {dialog.type === 'reserve' ? (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">事情・ご要望（任意）</label>
+                  <textarea
+                    value={dialog.note}
+                    onChange={e => setDialog({ ...dialog, note: e.target.value })}
+                    rows={3}
+                    placeholder="例: 少し遅れて到着します"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700">このレッスンの予約をキャンセルしますか？</p>
+              )}
+            </div>
+
+            <div className="flex gap-3 border-t border-gray-100 px-6 py-4">
+              <button onClick={() => setDialog(null)} className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm text-gray-600 hover:bg-gray-50">キャンセル</button>
+              <button
+                onClick={() => {
+                  if (dialog.type === 'reserve') void submitReserve(dialog.lesson, dialog.note)
+                  else void submitCancel(dialog.lesson)
+                }}
+                disabled={submitting}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:bg-indigo-400"
+              >
+                {submitting && <Loader2 size={14} className="animate-spin" />}
+                {dialog.type === 'reserve' ? '予約する' : 'キャンセルする'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
