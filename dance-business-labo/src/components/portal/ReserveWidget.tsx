@@ -15,7 +15,7 @@ interface Lesson {
   lesson_types: { name: string; duration_minutes: number } | null
 }
 
-type DialogState = { type: 'reserve'; lesson: Lesson; note: string } | { type: 'cancel'; lesson: Lesson } | null
+type DialogState = { type: 'reserve'; lesson: Lesson; note: string } | { type: 'cancel'; lesson: Lesson; note: string } | null
 
 // APIから返るタイムスタンプは常にJSTの日時として扱う（UTC変換しない）
 function parseJST(s: string): Date {
@@ -73,12 +73,16 @@ export default function ReserveWidget() {
     }
   }
 
-  async function submitCancel(lesson: Lesson) {
+  async function submitCancel(lesson: Lesson, note: string) {
     setSubmitting(true)
     setBusyLesson(lesson.id)
     setError('')
     try {
-      const response = await fetch(`/api/portal/lessons?lesson_id=${encodeURIComponent(lesson.id)}`, { method: 'DELETE' })
+      const response = await fetch(`/api/portal/lessons?lesson_id=${encodeURIComponent(lesson.id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note }),
+      })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || '予約を更新できませんでした')
       setDialog(null)
@@ -125,7 +129,7 @@ export default function ReserveWidget() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDialog(lesson.is_reserved ? { type: 'cancel', lesson } : { type: 'reserve', lesson, note: '' })}
+                  onClick={() => setDialog(lesson.is_reserved ? { type: 'cancel', lesson, note: '' } : { type: 'reserve', lesson, note: '' })}
                   disabled={isBusy || (!lesson.is_reserved && full)}
                   className={`flex-shrink-0 flex min-h-8 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${lesson.is_reserved ? 'bg-indigo-100 text-indigo-700 hover:bg-red-50 hover:text-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                 >
@@ -160,7 +164,17 @@ export default function ReserveWidget() {
                   />
                 </div>
               ) : (
-                <p className="text-sm text-gray-700">このレッスンの予約をキャンセルしますか？</p>
+                <div>
+                  <p className="text-sm text-gray-700 mb-3">このレッスンの予約をキャンセルしますか？</p>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">事情・理由（任意）</label>
+                  <textarea
+                    value={dialog.note}
+                    onChange={e => setDialog({ ...dialog, note: e.target.value })}
+                    rows={3}
+                    placeholder="例: 体調不良のため"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
               )}
             </div>
 
@@ -169,7 +183,7 @@ export default function ReserveWidget() {
               <button
                 onClick={() => {
                   if (dialog.type === 'reserve') void submitReserve(dialog.lesson, dialog.note)
-                  else void submitCancel(dialog.lesson)
+                  else void submitCancel(dialog.lesson, dialog.note)
                 }}
                 disabled={submitting}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:bg-indigo-400"

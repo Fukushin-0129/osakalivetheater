@@ -25,8 +25,10 @@ export async function sendNotificationEmail(subject: string, text: string) {
     return
   }
 
+  const footer = '\n\n---\n※このメールに返信しても、内容は自動ではアプリに反映されません。システム上で扱うのはリンクのクリックのみです。'
+
   try {
-    await t.sendMail({ from, to, subject, text })
+    await t.sendMail({ from, to, subject, text: `${text}${footer}` })
   } catch (err) {
     console.error('通知メールの送信に失敗しました:', err)
   }

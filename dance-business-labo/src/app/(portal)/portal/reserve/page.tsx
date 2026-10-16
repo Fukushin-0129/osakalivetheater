@@ -25,7 +25,7 @@ interface Lesson {
 
 type DialogState =
   | { type: 'reserve'; lesson: Lesson; note: string }
-  | { type: 'cancel'; lesson: Lesson }
+  | { type: 'cancel'; lesson: Lesson; note: string }
   | { type: 'absence'; lesson: Lesson; reason: string }
   | null
 
@@ -78,13 +78,17 @@ export default function PortalReservePage() {
     }
   }
 
-  async function submitCancel(lesson: Lesson) {
+  async function submitCancel(lesson: Lesson, note: string) {
     setSubmitting(true)
     setBusyLesson(lesson.id)
     setError('')
     setMessage('')
     try {
-      const response = await fetch(`/api/portal/lessons?lesson_id=${encodeURIComponent(lesson.id)}`, { method: 'DELETE' })
+      const response = await fetch(`/api/portal/lessons?lesson_id=${encodeURIComponent(lesson.id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note }),
+      })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || '予約を更新できませんでした')
       setMessage('予約をキャンセルしました')
@@ -169,7 +173,7 @@ export default function PortalReservePage() {
                 <div className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:items-end">
                   <button
                     type="button"
-                    onClick={() => setDialog(lesson.is_reserved ? { type: 'cancel', lesson } : { type: 'reserve', lesson, note: '' })}
+                    onClick={() => setDialog(lesson.is_reserved ? { type: 'cancel', lesson, note: '' } : { type: 'reserve', lesson, note: '' })}
                     disabled={isBusy || (!lesson.is_reserved && full)}
                     className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto ${lesson.is_reserved ? 'bg-indigo-50 text-indigo-700 hover:bg-red-50 hover:text-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                   >
@@ -219,7 +223,17 @@ export default function PortalReservePage() {
               )}
 
               {dialog.type === 'cancel' && (
-                <p className="text-sm text-gray-700">このレッスンの予約をキャンセルしますか？</p>
+                <div>
+                  <p className="text-sm text-gray-700 mb-3">このレッスンの予約をキャンセルしますか？</p>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">事情・理由（任意）</label>
+                  <textarea
+                    value={dialog.note}
+                    onChange={e => setDialog({ ...dialog, note: e.target.value })}
+                    rows={3}
+                    placeholder="例: 体調不良のため"
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
               )}
 
               {dialog.type === 'absence' && (
@@ -242,7 +256,7 @@ export default function PortalReservePage() {
               <button
                 onClick={() => {
                   if (dialog.type === 'reserve') void submitReserve(dialog.lesson, dialog.note)
-                  if (dialog.type === 'cancel') void submitCancel(dialog.lesson)
+                  if (dialog.type === 'cancel') void submitCancel(dialog.lesson, dialog.note)
                   if (dialog.type === 'absence') void submitAbsence(dialog.lesson, dialog.reason)
                 }}
                 disabled={submitting}
