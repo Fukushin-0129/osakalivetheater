@@ -233,6 +233,17 @@ export type StudentSubscription = {
   students?: Student
 }
 
+export type LessonAbsenceNotice = {
+  id: string
+  student_id: string
+  lesson_id: string
+  reason: string | null
+  status: 'pending' | 'acknowledged'
+  token: string
+  responded_at: string | null
+  created_at: string
+}
+
 export type PaymentType = 'ticket_purchase' | 'subscription_payment' | 'trial_lesson_payment' | 'manual'
 
 export type PaymentStatus = 'pending' | 'completed' | 'failed'
