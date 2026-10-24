@@ -3,7 +3,7 @@
 import { useEffect, useState, use, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Lesson, LessonType, CurriculumItem, LessonPlanItem, LessonEvaluation, Student, LessonVideo } from '@/types/database'
-import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X, GripVertical, Video } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Star, ChevronDown, ChevronRight, Save, CheckCircle, Loader2, BookOpen, ClipboardList, MessageSquare, Send, X, GripVertical, Video, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { getYouTubeId } from '@/lib/youtube'
 
@@ -67,6 +67,10 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
   const [newVideoLabel, setNewVideoLabel] = useState('')
   const [addingVideo, setAddingVideo] = useState(false)
   const [videoError, setVideoError] = useState<string | null>(null)
+  const [editingVideoId, setEditingVideoId] = useState<string | null>(null)
+  const [editVideoUrl, setEditVideoUrl] = useState('')
+  const [editVideoLabel, setEditVideoLabel] = useState('')
+  const [savingVideoEdit, setSavingVideoEdit] = useState(false)
   // 計画編集モードでの並び替え（ドラッグ＆ドロップ）
   const [grabbedId, setGrabbedId] = useState<string | null>(null)
   const [draggedId, setDraggedId] = useState<string | null>(null)
@@ -226,6 +230,34 @@ export default function LessonDetailPage({ params }: { params: Promise<{ id: str
     if (!window.confirm('この動画リンクを削除しますか？')) return
     await supabase.from('lesson_videos').delete().eq('id', id)
     setLessonVideos(prev => prev.filter(v => v.id !== id))
+  }
+
+  function startEditVideo(v: LessonVideo) {
+    setEditingVideoId(v.id)
+    setEditVideoUrl(v.url)
+    setEditVideoLabel(v.label ?? '')
+    setVideoError(null)
+  }
+
+  async function saveVideoEdit(id: string) {
+    setVideoError(null)
+    const url = editVideoUrl.trim()
+    if (!url) return
+    if (!getYouTubeId(url)) {
+      setVideoError('YouTubeのURLとして認識できませんでした')
+      return
+    }
+    setSavingVideoEdit(true)
+    const { error } = await supabase.from('lesson_videos')
+      .update({ url, label: editVideoLabel.trim() || null })
+      .eq('id', id)
+    setSavingVideoEdit(false)
+    if (error) {
+      setVideoError(`保存に失敗しました: ${error.message}`)
+      return
+    }
+    setLessonVideos(prev => prev.map(v => v.id === id ? { ...v, url, label: editVideoLabel.trim() || null } : v))
+    setEditingVideoId(null)
   }
 
   async function updatePlanNotes(planItemId: string, notes: string) {
@@ -587,6 +619,30 @@ ${planSummary || '（未設定）'}`
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
             {lessonVideos.map(v => {
               const ytId = getYouTubeId(v.url)
+              if (editingVideoId === v.id) {
+                return (
+                  <div key={v.id} className="col-span-2 sm:col-span-3 border border-indigo-200 rounded-lg p-3 bg-indigo-50/50">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input value={editVideoUrl} onChange={e => setEditVideoUrl(e.target.value)}
+                        placeholder="YouTube限定公開の動画URL"
+                        className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <input value={editVideoLabel} onChange={e => setEditVideoLabel(e.target.value)}
+                        placeholder="メモ（任意）"
+                        className="sm:w-40 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <div className="flex gap-2">
+                        <button onClick={() => saveVideoEdit(v.id)} disabled={savingVideoEdit || !editVideoUrl.trim()}
+                          className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap">
+                          {savingVideoEdit ? '保存中...' : '保存'}
+                        </button>
+                        <button onClick={() => { setEditingVideoId(null); setVideoError(null) }}
+                          className="border border-gray-200 text-gray-500 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-50">
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
               return (
                 <div key={v.id} className="relative group">
                   <a href={v.url} target="_blank" rel="noopener noreferrer" className="block">
@@ -600,10 +656,16 @@ ${planSummary || '（未設定）'}`
                     )}
                   </a>
                   {v.label && <p className="text-xs text-gray-500 mt-1 truncate">{v.label}</p>}
-                  <button onClick={() => deleteLessonVideo(v.id)}
-                    className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-opacity">
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="absolute top-1 right-1 flex gap-1">
+                    <button onClick={() => startEditVideo(v)}
+                      className="bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-opacity">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => deleteLessonVideo(v.id)}
+                      className="bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-opacity">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               )
             })}
