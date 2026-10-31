@@ -15,6 +15,7 @@ const STATUS_OPTIONS = [
 ] as const
 
 type StatusValue = typeof STATUS_OPTIONS[number]['value']
+type AttendanceView = Omit<Attendance, 'status'> & { status: Attendance['status'] | 'reserved' }
 
 type StudentSub = {
   id: string
@@ -44,7 +45,7 @@ export default function AttendancePage() {
   const [lessons, setLessons] = useState<Lesson[]>([])
   const [students, setStudents] = useState<Student[]>([])
   const [selectedLesson, setSelectedLesson] = useState<string>('')
-  const [attendance, setAttendance] = useState<Record<string, Attendance>>({})
+  const [attendance, setAttendance] = useState<Record<string, AttendanceView>>({})
   const [loadingLesson, setLoadingLesson] = useState(false)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [cardCompletedMsg, setCardCompletedMsg] = useState<string | null>(null)
@@ -139,11 +140,28 @@ export default function AttendancePage() {
     setLoadingLesson(true)
     Promise.all([
       supabase.from('attendance').select('*').eq('lesson_id', selectedLesson),
+      supabase.from('student_reservations').select('student_id, legacy_attendance_id').eq('lesson_id', selectedLesson),
       supabase.from('student_substitutions').select('*').eq('original_lesson_id', selectedLesson),
       supabase.from('student_substitutions').select('*').eq('substitute_lesson_id', selectedLesson),
-    ]).then(([{ data: att }, { data: orig }, { data: sub }]) => {
-      const map: Record<string, Attendance> = {}
+    ]).then(([{ data: att }, { data: reservations }, { data: orig }, { data: sub }]) => {
+      const map: Record<string, AttendanceView> = {}
       for (const a of att ?? []) map[a.student_id] = a
+      for (const reservation of reservations ?? []) {
+        const existing = map[reservation.student_id]
+        const isLegacyReservation = !!reservation.legacy_attendance_id && existing?.id === reservation.legacy_attendance_id
+        if (!existing || isLegacyReservation) {
+          map[reservation.student_id] = {
+            ...(existing ?? {}),
+            id: existing?.id ?? '',
+            lesson_id: selectedLesson,
+            student_id: reservation.student_id,
+            status: 'reserved',
+            ticket_used: existing?.ticket_used ?? false,
+            notes: existing?.notes ?? null,
+            created_at: existing?.created_at ?? '',
+          }
+        }
+      }
       setAttendance(map)
       setSubsAsOriginal(orig ?? [])
       setSubsAsSubstitute(sub ?? [])
@@ -183,7 +201,7 @@ export default function AttendancePage() {
     setSavingId(studentId)
     const existing = attendance[studentId]
     const becomingPresent = status === 'present' && existing?.status !== 'present'
-    if (existing) {
+    if (existing && !(existing.status === 'reserved' && !existing.id)) {
       if (existing.status === status) {
         await supabase.from('attendance').delete().eq('id', existing.id)
         setAttendance(prev => { const n = { ...prev }; delete n[studentId]; return n })
@@ -366,7 +384,7 @@ export default function AttendancePage() {
     const upserts = students.map(s => ({ lesson_id: selectedLesson, student_id: s.id, status: 'present' as StatusValue }))
     await supabase.from('attendance').upsert(upserts, { onConflict: 'lesson_id,student_id' })
     const { data } = await supabase.from('attendance').select('*').eq('lesson_id', selectedLesson)
-    const map: Record<string, Attendance> = {}
+    const map: Record<string, AttendanceView> = {}
     for (const a of data ?? []) map[a.student_id] = a
     setAttendance(map)
     for (const studentId of newlyPresentIds) {
@@ -381,6 +399,7 @@ export default function AttendancePage() {
     const vals = Object.values(attendance)
     return {
       present: vals.filter(a => a.status === 'present').length,
+      reserved: vals.filter(a => a.status === 'reserved').length,
       late: vals.filter(a => a.status === 'late').length,
       absent: vals.filter(a => a.status === 'absent').length,
       cancelled: vals.filter(a => a.status === 'cancelled').length,
@@ -406,7 +425,7 @@ export default function AttendancePage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">出席管理</h1>
-          <p className="text-gray-500 text-sm mt-0.5">レッスンを選んで出席を記録（手動スタンプ）</p>
+          <p className="text-gray-500 text-sm mt-0.5">予約者は「出席予定」として表示します。実際の出席状況はここで記録できます。</p>
         </div>
         <div className="flex gap-2">
           <Link href="/attendance/checkin"
@@ -470,6 +489,7 @@ export default function AttendancePage() {
                 </div>
                 <div className="flex flex-wrap gap-3 text-sm">
                   <span className="text-green-700 font-medium">出席 {counts.present}</span>
+                  {counts.reserved > 0 && <span className="text-indigo-600 font-medium">予約 {counts.reserved}</span>}
                   <span className="text-yellow-600 font-medium">遅刻 {counts.late}</span>
                   <span className="text-red-500 font-medium">欠席 {counts.absent}</span>
                   {counts.substituted > 0 && <span className="text-purple-600 font-medium">振替 {counts.substituted}</span>}
@@ -523,10 +543,11 @@ export default function AttendancePage() {
                       const status = attendance[id]?.status
                       if (status === 'present') return 0
                       if (status === 'late') return 1
-                      if (status === 'substituted') return 2
-                      if (status === 'absent') return 3
-                      if (status === 'cancelled') return 4
-                      return 5 // unmarked
+                      if (status === 'reserved') return 2
+                      if (status === 'substituted') return 3
+                      if (status === 'absent') return 4
+                      if (status === 'cancelled') return 5
+                      return 6 // unmarked
                     }
                     return statusOrder(a.id) - statusOrder(b.id)
                   }).map(s => {
@@ -554,6 +575,11 @@ export default function AttendancePage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
+                            {a?.status === 'reserved' && (
+                              <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700">
+                                予約済・出席予定
+                              </span>
+                            )}
                             {isSaving ? (
                               <Loader2 size={16} className="animate-spin text-indigo-400 my-1" />
                             ) : (
@@ -656,6 +682,7 @@ export default function AttendancePage() {
             {!loadingLesson && students.length > 0 && (
               <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex flex-wrap gap-3 text-xs">
                 <span className="text-green-600 font-medium">✓ 出席 {counts.present}名</span>
+                {counts.reserved > 0 && <span className="text-indigo-600 font-medium">▣ 予約 {counts.reserved}名</span>}
                 <span className="text-yellow-600 font-medium">⏰ 遅刻 {counts.late}名</span>
                 <span className="text-red-500 font-medium">✗ 欠席 {counts.absent}名</span>
                 <span className="text-gray-400 font-medium">🚫 キャンセル {counts.cancelled}名</span>
