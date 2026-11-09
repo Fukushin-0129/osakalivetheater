@@ -328,10 +328,10 @@ export default function StagesPage() {
                 <label className="block text-xs font-medium text-gray-600 mb-1.5 flex items-center gap-1"><Video size={13} /> 動画リンク（YouTube限定公開・最大{MAX_VIDEOS}本）</label>
                 <div className="space-y-2">
                   {videos.map((v, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input value={v.url} onChange={e => updateVideo(i, 'url', e.target.value)} placeholder="https://youtu.be/..." className={`${inputCls} flex-1`} />
-                      <input value={v.label} onChange={e => updateVideo(i, 'label', e.target.value)} placeholder="メモ（任意）" className={`${inputCls} w-32`} />
-                      <button onClick={() => removeVideo(i)} className="text-gray-400 hover:text-red-500 p-1.5"><X size={14} /></button>
+                    <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]">
+                      <input value={v.url} onChange={e => updateVideo(i, 'url', e.target.value)} aria-label={`動画URL ${i + 1}`} placeholder="https://youtu.be/..." className={`${inputCls} min-w-0`} />
+                      <input value={v.label} onChange={e => updateVideo(i, 'label', e.target.value)} placeholder="メモ（任意）" className={`${inputCls} col-start-1 row-start-2 min-w-0 sm:col-start-2 sm:row-start-1`} />
+                      <button type="button" aria-label={`動画リンク ${i + 1} を削除`} onClick={() => removeVideo(i)} className="col-start-2 row-start-1 sm:col-start-3 text-gray-400 hover:text-red-500 p-1.5"><X size={14} /></button>
                     </div>
                   ))}
                   {videos.length < MAX_VIDEOS && (
