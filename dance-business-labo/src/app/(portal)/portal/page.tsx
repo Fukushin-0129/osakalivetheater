@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { Ticket, FileText, Calendar, AlertTriangle, Clock, Video, Play } from 'lucide-react'
 import { getYouTubeId } from '@/lib/youtube'
 import ReserveWidget from '@/components/portal/ReserveWidget'
+import VideoThumb from '@/components/VideoThumb'
+import { practiceVideoUrl, practiceWeekStart } from '@/lib/weekly-practice'
 
 // DBに保存されたタイムスタンプはタイムゾーンなし文字列として扱い、
 // そのまま日本時間として解釈する（UTC変換しない）
@@ -38,7 +40,7 @@ export default async function PortalPage() {
     )
   }
 
-  const [{ data: tickets }, { data: records }, { data: reservations }, { data: attendedRows }] = await Promise.all([
+  const [{ data: tickets }, { data: records }, { data: reservations }, { data: attendedRows }, { data: practiceRows, error: practiceError }] = await Promise.all([
     admin!.from('student_tickets')
       .select('*, ticket_types(name)')
       .eq('student_id', student.id)
@@ -55,7 +57,20 @@ export default async function PortalPage() {
       .select('lesson_id')
       .eq('student_id', student.id)
       .in('status', ['present', 'late']),
+    admin!.from('student_weekly_practice')
+      .select('curriculum_item_id, curriculum_items(name, video_url)')
+      .eq('student_id', student.id)
+      .eq('week_start', practiceWeekStart())
+      .order('created_at')
+      .order('curriculum_item_id'),
   ])
+
+  type PracticeRow = { curriculum_item_id: string; curriculum_items: { name: string; video_url: string | null } | null }
+  const weeklyVideos = ((practiceRows ?? []) as unknown as PracticeRow[]).flatMap(row => {
+    const item = row.curriculum_items
+    const url = practiceVideoUrl(item?.video_url)
+    return item && url ? [{ id: row.curriculum_item_id, name: item.name, url }] : []
+  })
 
   const reservationLessonIds = (reservations ?? []).map((reservation) => reservation.lesson_id)
   const attendedLessonIds = [...new Set((attendedRows ?? []).map(r => r.lesson_id))]
@@ -177,6 +192,23 @@ export default async function PortalPage() {
           </div>
         </div>
       )}
+
+      <section className="mb-4 rounded-xl bg-white p-5 shadow-sm">
+        <h2 className="mb-3 flex items-center gap-2 font-semibold text-gray-700">
+          <Video size={16} className="text-indigo-500" /> 今週の練習
+        </h2>
+        {practiceError ? (
+          <p className="text-sm text-gray-500">練習動画を読み込めませんでした。</p>
+        ) : weeklyVideos.length === 0 ? (
+          <p className="text-sm text-gray-500">今週の練習動画はまだありません。</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {weeklyVideos.map(video => (
+              <VideoThumb key={video.id} url={video.url} label={video.name} size="w-full min-w-0" />
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* 予約済みのレッスン */}
       <div className="bg-white rounded-xl shadow-sm p-5 mb-4">
