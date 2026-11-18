@@ -6,6 +6,8 @@ import StudentQrCode from '@/components/StudentQrCode'
 import BackButton from '@/components/BackButton'
 import { Theater, MapPin } from 'lucide-react'
 import VideoThumb from '@/components/VideoThumb'
+import WeeklyPracticeEditor from '@/components/WeeklyPracticeEditor'
+import { practiceVideoUrl, practiceWeekStart } from '@/lib/weekly-practice'
 
 const DAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -124,6 +126,7 @@ function AttendanceList({ records }: { records: AttendanceRecord[] }) {
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
+  const weekStart = practiceWeekStart()
 
   const [
     { data: student },
@@ -131,6 +134,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     { data: tickets },
     { data: records },
     { data: stagePerformances },
+    { data: curriculum, error: curriculumError },
+    { data: practice, error: practiceError },
   ] = await Promise.all([
     supabase.from('students').select('*').eq('id', id).single(),
     supabase.from('attendance').select('*, lessons(title, scheduled_at)').eq('student_id', id),
@@ -139,9 +144,19 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
     supabase.from('stage_performance_participants')
       .select('role, stage_performances(id, title, performed_at, venue)')
       .eq('student_id', id),
+    supabase.from('curriculum_items').select('id, name, parent_id, video_url').order('display_order').order('name'),
+    supabase.from('student_weekly_practice').select('curriculum_item_id').eq('student_id', id)
+      .eq('week_start', weekStart).order('created_at').order('curriculum_item_id'),
   ])
 
   if (!student) notFound()
+
+  const curriculumNames = new Map((curriculum ?? []).map(item => [item.id, item.name]))
+  const practiceVideos = (curriculum ?? []).map(item => ({
+    id: item.id,
+    label: [curriculumNames.get(item.parent_id), item.name].filter(Boolean).join(' / '),
+    assignable: !!practiceVideoUrl(item.video_url),
+  }))
 
   let familyMembers: { id: string; name: string; is_active: boolean }[] = []
   if (student.family_group) {
@@ -215,6 +230,10 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           ))}
         </div>
       )}
+
+      <WeeklyPracticeEditor key={`${id}:${weekStart}`} studentId={id} weekStart={weekStart}
+        videos={practiceVideos} assignedIds={(practice ?? []).map(row => row.curriculum_item_id)}
+        loadFailed={!!(curriculumError || practiceError)} />
 
       <div className="grid md:grid-cols-[1fr_240px] gap-4 mb-4 items-start">
         <div className="grid sm:grid-cols-[200px_1fr] gap-4">
